@@ -82,18 +82,33 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [ ] **G2.6** Worker: ASR (WhisperX) + Demucs
 - [ ] **G2.7** Chọn đoạn bằng LLM (prompt tiêu chí kỹ thuật, không phải "điểm cười")
 - [ ] **G2.8** Viết kịch bản Việt + glossary + **ngân sách âm tiết theo cảnh**
-- [ ] **G2.9** `src/tts/` — adapter VoxCPM2, interface cho phép đổi sang FPT.AI
+- [ ] **G2.9** `src/infrastructure/tts/` — adapter VoxCPM2, cùng port cho FPT.AI
 - [ ] **G2.10** Forced alignment: kịch bản đã biết ↔ audio TTS
 - [ ] **G2.11** Trộn audio: Demucs + sidechain duck + `loudnorm`
 - [ ] **G2.12** Reframe **có điều kiện** (bỏ qua nếu nguồn đã 9:16)
 - [ ] **G2.13** Render: burn ASS + intro/outro + thẻ ghi nguồn
-- [ ] **G2.14** Gate duyệt của người + UI tối giản
+- [ ] **G2.14** Gate duyệt của người — use case xong ở G2.3; mặt tiền web ở **GW** bên dưới
 - [ ] **G2.15** Workflow n8n nối các bước
+
+### GW — Mặt tiền web nội bộ (xen vào giữa G2 và G3)
+
+Vì sao cần, không phải cho đẹp: **gate duyệt của người là bắt buộc ở Giai đoạn 1** và tốn 20–35 phút/video (nguồn en) hoặc 35–55 phút (nguồn zh). Người duyệt là quản lý nội dung/chất lượng, không phải dev — không thể bắt họ bấm `POST /items/12/approve` trong Swagger. **Mọi video đều đi qua đúng cửa đó**, nên cửa đó phải dùng được.
+
+Quyết định kỹ thuật: **Jinja2 + HTMX server-rendered**, không SPA — xem D21. Sống ở `src/interfaces/web/`, dùng lại đúng use case đã có, **không thêm một dòng nghiệp vụ nào**.
+
+- [ ] **GW.1** Trang khai báo + duyệt nguồn *(làm sớm: dùng được ngay, phục vụ G0.1–G0.2)*
+- [ ] **GW.2** Trang soát transcript ngoại ngữ (bước ⑥ của pipeline)
+- [ ] **GW.3** Trang duyệt video: phát video, đọc phụ đề, approve / reject / trả về viết lại
+- [ ] **GW.4** Dashboard tối giản: đếm item theo bước + hàng đợi việc + công duyệt dự kiến
+- [ ] **GW.5** Phục vụ file media cho trình duyệt (`media/output`, chỉ đọc)
+- [ ] **GW.6** Xác thực tối giản: basic auth hoặc token dùng chung *(prod đã bind `127.0.0.1`)*
+
+**Không làm:** CMS, quản lý người dùng/phân quyền, trang phân tích engagement. 2–5 người nội bộ.
 
 ### G3 — Publish YouTube (tuần 5–7)
 
 - [ ] **G3.1** GCP project + OAuth consent + credential
-- [ ] **G3.2** `src/publish/` — interface `publish(video, metadata, platform)`
+- [ ] **G3.2** `src/infrastructure/publish/` — adapter sau port `VideoPublisher` (port đã có ở G2.3)
 - [ ] **G3.3** Adapter YouTube Data API (`videos.insert`, 100/ngày)
 - [ ] **G3.4** Video công khai đầu tiên
 
@@ -177,6 +192,8 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D18 | Thêm `sources.external_owner_id`, bắt buộc với nguồn dạng bao | Khớp theo host nghĩa là duyệt một kênh YouTube mở cửa cho mọi URL youtube.com — lỗ thật, và nó đi qua im lặng | 13/09 |
 | D19 | **Không vendor `core/_1_ytdlp.py`** của VideoLingo, tự viết adapter | Upstream chạy `pip install --upgrade yt-dlp` mỗi lần tải, ghi vào `output/` toàn cục, và gắn cứng `config.yaml` | 13/09 |
 | D20 | Mapper viết tay, không để ORM map thẳng vào entity | Value object phải kiểm bất biến **cả khi** dữ liệu đến từ DB — một dòng hỏng nổ lúc đọc, không lẳng lặng qua gate | 13/09 |
+| D21 | Mặt tiền web là **Jinja2 + HTMX server-rendered**, không React/Vue | 2–5 người dùng nội bộ. SPA đòi npm + một Dockerfile + một container nữa mà không mua được gì; phần khó nhất là phát video, HTML thuần làm tốt nhất | 13/09 |
+| D22 | Theo dõi pipeline/retry/thông báo dùng **n8n**, không tự viết | n8n đã trong stack và có UI sẵn. Tự viết lại là trùng việc | 13/09 |
 
 ---
 

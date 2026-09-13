@@ -8,12 +8,13 @@ PROD    := $(BASE) -f docker/docker-compose.prod.yml --env-file .env.prod
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-up dev-down dev-logs dev-build prod-up prod-down prod-logs prod-build \
-        test test-int test-all lint shell psql models status clean-work
+        test test-int test-all lint shell psql models status clean-work \n        migrate migrate-prod migrate-rev migrate-history
 
 help:
 	@echo "DEV : dev-up dev-down dev-logs dev-build"
 	@echo "PROD: prod-up prod-down prod-logs prod-build"
-	@echo "KHAC: test test-int test-all lint shell psql models status clean-work"
+	@echo "DB  : migrate migrate-prod migrate-rev migrate-history"
+	@echo "KHAC: test test-int test-all lint shell psql models status clean-work \n        migrate migrate-prod migrate-rev migrate-history"
 
 # ---------------- DEV ----------------
 dev-up:
@@ -59,6 +60,22 @@ test-all:
 
 lint:
 	$(DC) $(DEV) run --rm --no-deps api ruff check src tests
+
+# ---------------- Migration ----------------
+# Alembic là nguồn duy nhất của schema. Baseline viết idempotent nên chạy được
+# cả trên DB trống và DB đã có bảng từ bản 01-schema.sql cũ.
+migrate:
+	$(DC) $(DEV) run --rm api alembic upgrade head
+
+migrate-prod:
+	$(DC) $(PROD) run --rm api alembic upgrade head
+
+# make migrate-rev m="them cot x"
+migrate-rev:
+	$(DC) $(DEV) run --rm api alembic revision --autogenerate -m "$(m)"
+
+migrate-history:
+	$(DC) $(DEV) run --rm api alembic history --indicate-current
 
 # ---------------- Tiện ích ----------------
 shell:

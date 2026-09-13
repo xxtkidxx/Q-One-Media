@@ -28,6 +28,8 @@ CMD ["uvicorn", "src.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8
 # ---------- prod ----------
 FROM base AS prod
 COPY src/ /app/src/
+COPY alembic/ /app/alembic/
+COPY alembic.ini /app/alembic.ini
 RUN useradd -m -u 10001 qone && chown -R qone:qone /app
 USER qone
 EXPOSE 8000
