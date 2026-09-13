@@ -1,13 +1,13 @@
 """Worker: lấy việc từ hàng đợi Postgres và chạy.
 
-Vòng lặp cố tình đơn giản — mỗi lần một việc, không thread pool. Lý do: các
-bước nặng (WhisperX, Demucs, VoxCPM2) đều chiếm trọn GPU, nên chạy song song
-trong cùng tiến trình chỉ làm tăng nguy cơ hết VRAM chứ không nhanh hơn. Muốn
-nhiều việc cùng lúc thì tăng số container worker, và ``SKIP LOCKED`` đã bảo đảm
-chúng không giành nhau.
+Vòng lặp cố tình đơn giản — **một việc một lần, không thread pool**. Lý do: các
+bước nặng (WhisperX large-v3, Demucs, VoxCPM2) đều chiếm trọn GPU, nên chạy song
+song trong cùng tiến trình chỉ làm tăng nguy cơ hết VRAM chứ không nhanh hơn.
+Muốn nhiều việc cùng lúc thì tăng số container worker, và ``FOR UPDATE SKIP
+LOCKED`` đã bảo đảm chúng không giành nhau.
 
-Việc nào chưa có handler thì **thất bại rõ ràng**, không bỏ qua im lặng: một
-job pending mãi mãi khó phát hiện hơn một job failed có thông báo.
+Việc nào chưa có handler thì **thất bại rõ ràng**, không bỏ qua im lặng: một job
+pending mãi mãi khó phát hiện hơn một job failed có thông báo.
 """
 
 from __future__ import annotations
@@ -16,14 +16,16 @@ import os
 import signal
 import socket
 import time
-from collections.abc import Callable
 from datetime import UTC, datetime
 
-from src.application.use_cases.download_item import download_item
-from src.domain.scheduling.entities import Job, JobTask
-from src.infrastructure.clock import SystemClock
+from src.domain.scheduling.entities import Job
 from src.infrastructure.db.uow import SqlUnitOfWork, make_engine, make_session_factory
-from src.infrastructure.ingest.ytdlp import YtDlpDownloader, YtDlpProbe
+from src.interfaces.worker.handlers import (
+    HANDLERS,
+    REQUIRED_STAGE,
+    _ChainRedirected,
+    enqueue_next,
+)
 from src.shared.config import Settings, get_settings
 from src.shared.logging import configure_logging, get_logger
 
@@ -31,6 +33,7 @@ log = get_logger(__name__)
 
 IDLE_SLEEP_SEC = 3.0
 STALE_LOCK_SEC = 3600  # job running quá 1 giờ coi như worker đã chết
+STALE_SWEEP_EVERY = int(300 / IDLE_SLEEP_SEC)
 
 _shutdown = False
 
@@ -46,27 +49,26 @@ def _request_shutdown(signum: int, _frame: object) -> None:
     log.info("worker.shutdown.requested", signal=signum)
 
 
-Handler = Callable[[Job, SqlUnitOfWork, Settings], None]
+def _stage_ok(job: Job, uow: SqlUnitOfWork) -> tuple[bool, str]:
+    """Kiểm item đang ở đúng bước trước khi chạy handler.
 
-
-def _handle_download(job: Job, uow: SqlUnitOfWork, settings: Settings) -> None:
-    if job.item_id is None:
-        raise ValueError("job download thiếu item_id")
-    download_item(
-        job.item_id,
-        downloader=YtDlpDownloader(),
-        probe=YtDlpProbe(),
-        media_root=settings.media_root,
-        uow=uow,
-        clock=SystemClock(),
-    )
-
-
-# Các handler còn lại thuộc G2.6–G2.13, chưa hiện thực. Không đăng ký ở đây thì
-# job sẽ failed kèm thông báo rõ tên bước — dễ thấy hơn là pending vô hạn.
-HANDLERS: dict[JobTask, Handler] = {
-    JobTask.DOWNLOAD: _handle_download,
-}
+    Cần thiết vì hàng đợi có thể chứa job cũ: người duyệt trả item về viết lại
+    thì job ``render`` đã xếp trước đó vẫn còn đó. Không kiểm thì nó sẽ render
+    lại bản cũ và đẩy item đi sai đường.
+    """
+    wanted = REQUIRED_STAGE.get(job.task)
+    if wanted is None or job.item_id is None:
+        return True, ""
+    with uow:
+        item = uow.items.get(job.item_id)
+    if item is None:
+        return False, f"item #{job.item_id} không còn tồn tại"
+    if item.stage not in wanted:
+        return False, (
+            f"item #{job.item_id} đang ở {item.stage}, việc {job.task} cần "
+            f"{' hoặc '.join(str(s) for s in wanted)}"
+        )
+    return True, ""
 
 
 def run_once(uow: SqlUnitOfWork, settings: Settings, *, worker_id: str) -> bool:
@@ -78,17 +80,43 @@ def run_once(uow: SqlUnitOfWork, settings: Settings, *, worker_id: str) -> bool:
         return False
 
     log.info("worker.job.start", job_id=job.id, task=str(job.task), item_id=job.item_id)
+
+    ok, why = _stage_ok(job, uow)
+    if not ok:
+        # Không phải lỗi: job đã lạc hậu. Đánh dấu cancelled để hàng đợi sạch,
+        # và KHÔNG xếp bước sau.
+        with uow:
+            job.cancel()
+            uow.jobs.update(job)
+            uow.commit()
+        log.info("worker.job.stale", job_id=job.id, task=str(job.task), reason=why)
+        return True
+
     handler = HANDLERS.get(job.task)
     try:
         if handler is None:
             raise NotImplementedError(f"chưa có handler cho bước {job.task}")
         handler(job, uow, settings)
+    except _ChainRedirected as exc:
+        # Handler đã tự xếp việc khác (ví dụ kịch bản tràn → viết lại). Job này
+        # coi như xong, nhưng không xếp bước tiếp theo của chuỗi bình thường.
+        with uow:
+            job.succeed(at=datetime.now(UTC))
+            job.error = str(exc)
+            uow.jobs.update(job)
+            uow.commit()
+        log.info("worker.job.redirected", job_id=job.id, reason=str(exc))
+        return True
     except Exception as exc:  # noqa: BLE001 — handler nào cũng có thể ném gì đó
-        # Phân loại theo thuộc tính ``retryable`` mà lớp lỗi tự khai. Lỗi license
-        # và lỗi input không retry; lỗi mạng và rate limit thì có.
+        # Phân loại theo thuộc tính ``retryable`` mà chính lớp lỗi khai. Lỗi
+        # license và lỗi input không retry; lỗi mạng và rate limit thì có.
         retryable = bool(getattr(exc, "retryable", False))
         with uow:
-            job.fail(error=f"{type(exc).__name__}: {exc}", at=datetime.now(UTC), retryable=retryable)
+            job.fail(
+                error=f"{type(exc).__name__}: {exc}",
+                at=datetime.now(UTC),
+                retryable=retryable,
+            )
             uow.jobs.update(job)
             uow.commit()
         log.error(
@@ -107,6 +135,9 @@ def run_once(uow: SqlUnitOfWork, settings: Settings, *, worker_id: str) -> bool:
         uow.jobs.update(job)
         uow.commit()
     log.info("worker.job.done", job_id=job.id, task=str(job.task))
+
+    if job.item_id is not None:
+        enqueue_next(job, uow, item_id=job.item_id)
     return True
 
 
@@ -117,8 +148,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, _request_shutdown)
 
     worker_id = f"{socket.gethostname()}-{os.getpid()}"
-    engine = make_engine(settings.database_url)
-    uow = SqlUnitOfWork(make_session_factory(engine))
+    uow = SqlUnitOfWork(make_session_factory(make_engine(settings.database_url)))
 
     settings.paths.ensure()
     log.info(
@@ -126,13 +156,20 @@ def main() -> None:
         worker_id=worker_id,
         tasks=[str(t) for t in HANDLERS],
         gpu_count=settings.gpu_count,
+        tts_engine=settings.tts.engine,
+        speech_rate=settings.tts.measured_rate,
     )
+    if settings.tts.measured_rate is None:
+        log.warning(
+            "worker.speech_rate.unmeasured",
+            note="TTS_SYLLABLES_PER_SEC chưa đặt — bước viết kịch bản sẽ từ chối chạy (G0.7)",
+        )
 
     idle_rounds = 0
     while not _shutdown:
         try:
             did_work = run_once(uow, settings, worker_id=worker_id)
-        except Exception as exc:  # noqa: BLE001 — vòng lặp không được chết vì một lỗi DB
+        except Exception as exc:  # noqa: BLE001 — vòng lặp không chết vì một lỗi DB
             log.error("worker.loop.error", error=str(exc), kind=type(exc).__name__)
             time.sleep(IDLE_SLEEP_SEC)
             continue
@@ -142,8 +179,7 @@ def main() -> None:
             continue
 
         idle_rounds += 1
-        # Mỗi ~5 phút rỗi thì thu hồi job của worker đã chết.
-        if idle_rounds % int(300 / IDLE_SLEEP_SEC) == 0:
+        if idle_rounds % STALE_SWEEP_EVERY == 0:
             with uow:
                 released = uow.jobs.release_stale(older_than_sec=STALE_LOCK_SEC)
                 uow.commit()

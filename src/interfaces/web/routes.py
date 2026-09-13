@@ -37,10 +37,12 @@ from src.application.use_cases.manage_sources import (
 from src.application.use_cases.review_item import (
     ItemNotFound,
     approve_item,
+    approve_transcript,
     list_review_queue,
     reject_item,
     send_back_for_rewrite,
 )
+from src.application.use_cases.write_script import load_transcript
 from src.application.use_cases.submit_url import (
     ItemAlreadyExists,
     SourceNotDeclared,
@@ -57,7 +59,8 @@ from src.domain.sourcing.value_objects import (
 )
 from src.infrastructure.clock import SystemClock
 from src.infrastructure.db.uow import SqlUnitOfWork
-from src.interfaces.api.deps import get_clock, get_uow
+from src.interfaces.api.deps import get_clock, get_config, get_uow
+from src.shared.config import Settings
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
@@ -65,6 +68,7 @@ router = APIRouter(prefix="/web", tags=["web"], include_in_schema=False)
 
 Uow = Annotated[SqlUnitOfWork, Depends(get_uow)]
 Clock = Annotated[SystemClock, Depends(get_clock)]
+Config = Annotated[Settings, Depends(get_config)]
 
 # Thứ tự các bước để hiện trên dashboard — theo đúng dòng chảy pipeline, không
 # theo thứ tự chữ cái, để người xem đọc được nghẽn đang ở đâu.
@@ -249,6 +253,50 @@ def submit(
     return RedirectResponse(url="/web", status_code=303)
 
 
+# ---------------- Soát transcript (gate người thứ nhất) ----------------
+
+
+@router.get("/transcripts", response_class=HTMLResponse)
+def transcript_queue(request: Request, uow: Uow, config: Config):
+    """Hàng đợi soát transcript ngoại ngữ.
+
+    Gate này tồn tại vì ASR có tỷ lệ sai thật: tiếng Anh sạch ~93–95% đúng, tiếng
+    Trung khoảng 1/8 ký tự sai. Bỏ gate thì sai sót của máy đi thẳng vào kịch bản.
+    """
+    with uow:
+        items = uow.items.list_by_stage(ItemStage.TRANSCRIPT_REVIEW, limit=50)
+        rows = []
+        for item in items:
+            source = uow.sources.get(item.source_id)
+            try:
+                text, _ = load_transcript(config.media_root, item.id or 0)
+            except Exception:  # noqa: BLE001 — thiếu file là trạng thái hợp lệ để hiện
+                text = ""
+            rows.append(
+                {
+                    "item": item,
+                    "lang": source.audio_lang.code if source else "?",
+                    "needs_extra": source.audio_lang.needs_extra_review if source else False,
+                    "text": text,
+                }
+            )
+    return _render(request, "transcripts.html", title="Soát transcript", rows=rows)
+
+
+@router.post("/transcripts/{item_id}/approve", response_class=HTMLResponse)
+def transcript_approve(
+    request: Request, item_id: int, uow: Uow, actor: Annotated[str, Form()]
+):
+    who = actor.strip()
+    if not who:
+        return _error_page(request, "Thiếu tên người soát", "Ai soát phải được ghi lại.")
+    try:
+        approve_transcript(item_id, actor=who, uow=uow)
+    except DomainError as exc:
+        return _error_page(request, "Không ghi được", str(exc))
+    return RedirectResponse(url="/web/transcripts", status_code=303)
+
+
 # ---------------- Hàng đợi duyệt ----------------
 
 
@@ -287,6 +335,7 @@ def review_decide(
     decision: str,
     uow: Uow,
     clock: Clock,
+    config: Config,
     actor: Annotated[str, Form()],
     notes: Annotated[str, Form()] = "",
 ):
@@ -295,7 +344,14 @@ def review_decide(
         return _error_page(request, "Thiếu tên người duyệt", "Ai duyệt phải được ghi lại.")
     try:
         if decision == "approve":
-            approve_item(item_id, actor=who, notes=notes.strip() or None, uow=uow, clock=clock)
+            approve_item(
+                item_id,
+                actor=who,
+                notes=notes.strip() or None,
+                uow=uow,
+                clock=clock,
+                queue_publish=config.publish.enabled,
+            )
         elif decision == "reject":
             if not notes.strip():
                 return _error_page(request, "Thiếu lý do", "Từ chối thì phải ghi lý do.")

@@ -12,9 +12,14 @@ from src.application.ports import Clock, UnitOfWork
 from src.domain.errors import DomainError
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import ItemStage
+from src.domain.scheduling.entities import Job, JobTask
 
 
 class ItemNotFound(DomainError):
+    pass
+
+
+class TranscriptNotAwaitingReview(DomainError):
     pass
 
 
@@ -41,19 +46,57 @@ def list_review_queue(*, uow: UnitOfWork, limit: int = 50) -> list[ReviewQueueEn
     return out
 
 
+def approve_transcript(item_id: int, *, actor: str, uow: UnitOfWork) -> Item:
+    """Người soát transcript xong → xếp việc chọn đoạn.
+
+    Đây là một trong hai chỗ dây nối giữa các bước **cố tình đứt**: worker dừng
+    sau khi nhận dạng lời, và chỉ thao tác của người mới nối tiếp được. Nhất là
+    với nguồn tiếng Trung, nơi khoảng 1/8 ký tự nhận sai.
+    """
+    with uow:
+        item = _get(uow, item_id)
+        if item.stage is not ItemStage.TRANSCRIPT_REVIEW:
+            raise TranscriptNotAwaitingReview(
+                f"item #{item_id} đang ở {item.stage}, không phải đang chờ soát transcript"
+            )
+        uow.jobs.enqueue(Job(task=JobTask.PICK_SEGMENT, item_id=item_id))
+        uow.audit.record(
+            entity="item",
+            entity_id=item_id,
+            action="transcript_approved",
+            actor=actor,
+        )
+        uow.commit()
+    return item
+
+
 def approve_item(
-    item_id: int, *, actor: str, notes: str | None = None, uow: UnitOfWork, clock: Clock
+    item_id: int,
+    *,
+    actor: str,
+    notes: str | None = None,
+    uow: UnitOfWork,
+    clock: Clock,
+    queue_publish: bool = False,
 ) -> Item:
+    """Duyệt thành phẩm, và xếp việc đăng nếu publish đang bật.
+
+    ``queue_publish`` mặc định ``False``: xếp việc đăng khi ``PUBLISH_ENABLED=false``
+    chỉ sinh ra job thất bại ở mỗi lần duyệt — tiếng ồn che mất lỗi thật. Người gọi
+    truyền cờ thật từ cấu hình.
+    """
     with uow:
         item = _get(uow, item_id)
         item.approve(by=actor, at=clock.now(), notes=notes)
         uow.items.update(item)
+        if queue_publish:
+            uow.jobs.enqueue(Job(task=JobTask.PUBLISH, item_id=item_id))
         uow.audit.record(
             entity="item",
             entity_id=item_id,
             action="review_approved",
             actor=actor,
-            detail={"notes": notes},
+            detail={"notes": notes, "publish_queued": queue_publish},
         )
         uow.commit()
     return item

@@ -15,7 +15,13 @@ from src.domain.errors import InvalidTransition, InvariantViolation
 
 
 class JobTask(StrEnum):
-    """Các bước nặng. Tên trùng với handler trong ``interfaces/worker``."""
+    """Các bước nặng — **mỗi thành viên phải có handler** trong ``interfaces/worker``.
+
+    Không có ``mix`` và ``reframe`` riêng: hai việc đó nằm bên trong ``render``, vì
+    thứ tự cắt → reframe → trộn → burn phụ đề là một chuỗi ffmpeg không tách rời
+    được (tách ra thì mỗi bước phải encode lại một lần nữa). Để chúng thành
+    ``JobTask`` riêng mà không có handler là mời một job treo vĩnh viễn.
+    """
 
     DOWNLOAD = "download"
     SEPARATE = "separate"
@@ -24,8 +30,6 @@ class JobTask(StrEnum):
     WRITE_SCRIPT = "write_script"
     SYNTHESIZE = "synthesize"
     ALIGN = "align"
-    MIX = "mix"
-    REFRAME = "reframe"
     RENDER = "render"
     PUBLISH = "publish"
 

@@ -12,11 +12,11 @@
 
 | | |
 |---|---|
-| Mốc hiện tại | **G2 + GW gần xong** · G0 vẫn mở, không chặn code |
-| Tiến độ tổng | ~55% code; các bước cần GPU/credential chưa chạy thật |
+| Mốc hiện tại | **G2 + GW xong về code** · G0 vẫn mở và giờ đã thành đường găng |
+| Tiến độ tổng | ~75% code Giai đoạn 1; các bước cần GPU/credential chưa chạy thật |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
-| Đã kiểm chứng | 181 unit + 40 integration test xanh; vòng đời license gate chạy đầu-cuối qua HTTP **và qua form web**; ffmpeg/libass test với binary thật |
-| Việc tiếp theo | G2.13 render + nối handler worker; rồi G0.10 (GPU) để chạy thật |
+| Đã kiểm chứng | **191 unit + 43 integration** test xanh; license gate chạy đầu-cuối qua HTTP và qua form web; toàn chuỗi render chạy với ffmpeg thật |
+| Việc tiếp theo | **G0.10 + G0.4**: xác nhận GPU trong Docker rồi chạy một video thật đầu-cuối |
 
 ---
 
@@ -79,16 +79,16 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [x] **G2.3** `src/interfaces/api/` — hộp thư URL, CRUD `sources`, **license gate** + xác minh chủ sở hữu
 - [~] **G2.4** `src/infrastructure/ingest/ytdlp.py` — wrapper + probe metadata xong; ưu tiên khẩn cho Douyin xong. **Chưa test trên URL Douyin thật** (G0.3)
 - [x] **G2.5** Job queue trên Postgres (`FOR UPDATE SKIP LOCKED`) + thu hồi việc của worker đã chết
-- [~] **G2.6** Adapter WhisperX + Demucs đã viết; **chưa chạy với model thật** (cần G0.10)
-- [~] **G2.7** Prompt + kiểm đầu ra xong; **chưa gọi API thật**
+- [~] **G2.6** Adapter + handler worker xong; **chưa chạy với model thật** (cần G0.10)
+- [~] **G2.7** Prompt + kiểm đầu ra + handler xong; **chưa gọi API thật**
 - [~] **G2.8** Prompt + ngân sách âm tiết xong; glossary chờ G1.3
 - [~] **G2.9** VoxCPM2 + FPT.AI sau cùng port xong; **chưa chạy model thật** (G0.5)
 - [~] **G2.10** `align_known_text()` + gộp dòng phụ đề xong; chưa chạy model thật
 - [x] **G2.11** Trộn audio qua Easel `audio_mix` (nền −20 dB) + `loudnorm`
 - [x] **G2.12** Reframe có điều kiện, chế độ `blur` — test với ffmpeg thật
-- [ ] **G2.13** Render: burn ASS + intro/outro + thẻ ghi nguồn
-- [ ] **G2.14** Gate duyệt của người — use case xong ở G2.3; mặt tiền web ở **GW** bên dưới
-- [ ] **G2.15** Workflow n8n nối các bước
+- [x] **G2.13** Render: cắt → reframe → trộn → burn ASS + thẻ ghi nguồn → `loudnorm`. Test với ffmpeg thật
+- [x] **G2.14** Hai gate người: soát transcript và duyệt thành phẩm. Dây nối worker **cố tình đứt** ở đúng hai chỗ đó
+- [!] **G2.15** Workflow n8n — **không còn cần** cho dòng chảy chính: worker tự nối bước qua hàng đợi. Giữ n8n cho thông báo và trigger định kỳ (xem D29)
 
 ### GW — Mặt tiền web nội bộ (xen vào giữa G2 và G3)
 
@@ -97,7 +97,7 @@ Vì sao cần, không phải cho đẹp: **gate duyệt của người là bắt
 Quyết định kỹ thuật: **Jinja2 + HTMX server-rendered**, không SPA — xem D21. Sống ở `src/interfaces/web/`, dùng lại đúng use case đã có, **không thêm một dòng nghiệp vụ nào**.
 
 - [x] **GW.1** Trang khai báo + duyệt nguồn — dùng được ngay hôm nay
-- [ ] **GW.2** Trang soát transcript ngoại ngữ (bước ⑥) — chờ có transcript thật
+- [x] **GW.2** Trang soát transcript ngoại ngữ (bước ⑥)
 - [x] **GW.3** Trang duyệt video: phát video, đọc kịch bản, approve / reject / trả về viết lại
 - [x] **GW.4** Dashboard: item theo từng bước + công duyệt tồn + hộp thư URL
 - [x] **GW.5** Phục vụ `media/output` chỉ đọc; `source/` và `work/` không ra HTTP
@@ -199,6 +199,9 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D25 | Mặt tiền web **không có JavaScript nào** (form POST + redirect), bỏ cả HTMX | Kế hoạch ghi "Jinja2 + HTMX" nhưng khi viết thì form đủ. Trang chạy được khi nhà máy không có internet ra ngoài — giá trị thật cho công cụ on-prem | 14/09 |
 | D26 | Chỉ mount `media/output` ra HTTP, không mount cả `MEDIA_ROOT` | `source/` chứa video gốc của người khác, `work/` chứa file trung gian — không có lý do gì để chúng ra được HTTP | 14/09 |
 | D27 | `WEB_USER`/`WEB_PASSWORD` **bắt buộc ở prod**, chặn ngay khi đọc config | Không tin vào việc bind `127.0.0.1`: một lần thêm reverse proxy là trang duyệt nội dung thành công khai, và không ai nhận ra | 14/09 |
+| D28 | Chọn đoạn: **tự lấy đề xuất đầu của LLM**, lưu cả danh sách kèm lý do | Sơ đồ ghi "LLM đề xuất → người chọn", nhưng GĐ1 đã có hai gate người; gate thứ ba đẩy công duyệt vượt xa mức 13–22 giờ/tháng đã ước lượng. Người duyệt cuối vẫn trả về được |
+| D29 | Worker **tự nối bước** qua hàng đợi; n8n không nằm trên dòng chảy chính | Mỗi bước xếp việc tiếp theo nên tự retry được và worker chết giữa đường không mất chuỗi. n8n giữ lại cho thông báo và trigger định kỳ, không phải để nối bước |
+| D30 | Không có `JobTask.MIX` / `JobTask.REFRAME` riêng | Hai việc đó nằm trong `render`: tách ra thì mỗi bước phải encode lại một lần nữa. Và một `JobTask` không có handler là mời một job treo vĩnh viễn |
 
 ---
 
@@ -221,3 +224,4 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 |---|---|
 | 13/09/2026 | Khảo sát công nghệ, quét nmi.vn, đánh giá 20 dự án OSS, chốt stack, dựng khung Docker + schema + AGENTS.md, dọn 13 file `.whl` và 5 tài liệu trung gian |
 | 13/09/2026 | Code lõi: domain 4 bounded context → application use case → infrastructure Postgres → FastAPI + worker. 4 commit. Bịt lỗ xác minh chủ sở hữu trong license gate. 112 unit + 12 integration test xanh. Sửa 4 bug do test bắt được (xem nhật ký commit) |
+| 14/09/2026 | Alembic thành nguồn duy nhất của schema · vendor Easel · tầng media (ffmpeg + ASS + render) · TTS + ngân sách âm tiết · ASR/Demucs/alignment · LLM chọn đoạn + viết kịch bản · publish YouTube/Facebook · mặt tiền web nội bộ · nối dây worker. 191 unit + 43 integration test |

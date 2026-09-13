@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from src.application.use_cases.review_item import (
     ItemNotFound,
+    TranscriptNotAwaitingReview,
     approve_item,
+    approve_transcript,
     list_review_queue,
     reject_item,
     send_back_for_rewrite,
@@ -21,7 +23,8 @@ from src.application.use_cases.submit_url import (
 from src.domain.production.value_objects import ItemStage
 from src.infrastructure.clock import SystemClock
 from src.infrastructure.db.uow import SqlUnitOfWork
-from src.interfaces.api.deps import get_clock, get_uow
+from src.shared.config import Settings
+from src.interfaces.api.deps import get_clock, get_config, get_uow
 from src.interfaces.api.schemas import (
     ItemOut,
     RejectIn,
@@ -35,6 +38,7 @@ router = APIRouter(prefix="/items", tags=["items"])
 
 Uow = Annotated[SqlUnitOfWork, Depends(get_uow)]
 Clock = Annotated[SystemClock, Depends(get_clock)]
+Config = Annotated["Settings", Depends(get_config)]
 
 
 @router.post("", response_model=SubmitUrlOut, status_code=202)
@@ -98,11 +102,35 @@ def get_item(item_id: int, uow: Uow) -> ItemOut:
     return ItemOut.of(item)
 
 
+@router.post("/{item_id}/transcript-approve", response_model=ItemOut)
+def transcript_approve(item_id: int, body: ReviewDecisionIn, uow: Uow) -> ItemOut:
+    """Người soát transcript xong → xếp việc chọn đoạn.
+
+    Worker dừng sau bước nhận dạng lời; chỉ thao tác này nối tiếp được.
+    """
+    try:
+        item = approve_transcript(item_id, actor=body.actor, uow=uow)
+    except ItemNotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except TranscriptNotAwaitingReview as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return ItemOut.of(item)
+
+
 @router.post("/{item_id}/approve", response_model=ItemOut)
-def approve(item_id: int, body: ReviewDecisionIn, uow: Uow, clock: Clock) -> ItemOut:
+def approve(
+    item_id: int, body: ReviewDecisionIn, uow: Uow, clock: Clock, config: Config
+) -> ItemOut:
     """Người duyệt chấp nhận. Đây là bước không thể tự động hoá ở Giai đoạn 1."""
     try:
-        item = approve_item(item_id, actor=body.actor, notes=body.notes, uow=uow, clock=clock)
+        item = approve_item(
+            item_id,
+            actor=body.actor,
+            notes=body.notes,
+            uow=uow,
+            clock=clock,
+            queue_publish=config.publish.enabled,
+        )
     except ItemNotFound as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return ItemOut.of(item)

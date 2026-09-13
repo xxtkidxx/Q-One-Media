@@ -62,7 +62,7 @@ def test_worker_phai_co_ten_de_lan_lai_duoc_khi_treo():
 
 
 def test_done_la_trang_thai_cuoi():
-    job = Job(task=JobTask.MIX, item_id=1, id=1)
+    job = Job(task=JobTask.ALIGN, item_id=1, id=1)
     job.claim(worker="w1", at=NOW)
     job.succeed(at=NOW)
     with pytest.raises(InvalidTransition):

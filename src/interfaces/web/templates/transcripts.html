@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Soát transcript</h1>
+<p class="sub">
+  Gate này tồn tại vì ASR sai thật: tiếng Anh sạch khoảng 93–95% đúng, tiếng Trung
+  khoảng <b>1/8 ký tự sai</b>. Bỏ gate thì sai sót của máy đi thẳng vào kịch bản
+  tiếng Việt, và ở đó không ai còn đối chiếu được với nguồn nữa.
+</p>
+
+{% for row in rows %}
+<div class="card">
+  <h2 style="margin-top:0">
+    #{{ row.item.id }} · {{ row.item.title_original or "(chưa có tiêu đề)" }}
+    <span class="pill {% if row.needs_extra %}warn{% endif %}">{{ row.lang }}</span>
+    {% if row.needs_extra %}<span class="pill warn">soát kỹ hơn</span>{% endif %}
+  </h2>
+  <p class="sub">
+    <a href="{{ row.item.url.value }}" target="_blank" rel="noopener">nguồn gốc</a>
+    {% if row.item.duration_sec %} · {{ row.item.duration_sec }}s{% endif %}
+  </p>
+
+  {% if row.text %}
+    <div class="scroll" style="max-height:280px; overflow-y:auto; border:1px solid var(--line);
+                               border-radius:4px; padding:10px">
+      <p class="mono" style="white-space:pre-wrap; margin:0; font-size:13px">{{ row.text }}</p>
+    </div>
+    <p class="sub">
+      Soát thuật ngữ kỹ thuật và số liệu trước. Chữ sai ở tên thiết bị hay ở một
+      con số là thứ đi tiếp vào kịch bản mà không ai phát hiện.
+    </p>
+  {% else %}
+    <p class="empty">Chưa đọc được file transcript.</p>
+  {% endif %}
+
+  <form method="post" action="/web/transcripts/{{ row.item.id }}/approve">
+    <div class="row">
+      <div>
+        <label>Người soát</label>
+        <input name="actor" type="text" required placeholder="ho.ten">
+      </div>
+    </div>
+    <div class="actions">
+      <button type="submit">Transcript đạt — cho chọn đoạn</button>
+    </div>
+    <p class="sub" style="margin-bottom:0">
+      Transcript sai nhiều thì sửa file
+      <code>media/work/item-{{ "%08d"|format(row.item.id) }}/transcript.json</code>
+      rồi mới bấm.
+    </p>
+  </form>
+</div>
+{% else %}
+<div class="card empty">Không có transcript nào chờ soát.</div>
+{% endfor %}
+{% endblock %}

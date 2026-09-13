@@ -186,3 +186,91 @@ def test_reframe_blur_dua_16_9_ve_9_16_khong_cat_hinh(landscape_video, tmp_path)
     info = ffmpeg.probe(out)
     assert info.aspect == pytest.approx(9 / 16, abs=0.01)
     assert info.duration_sec == pytest.approx(6.0, abs=0.4)
+
+
+# ---------------- Toàn chuỗi render ----------------
+
+
+@pytest.mark.skipif(
+    not (VENDOR_EASEL / "reframe.py").exists(), reason="chưa vendor Easel"
+)
+@skip_no_ffmpeg
+def test_render_toan_chuoi_ra_video_doc_co_phu_de(landscape_video, tmp_path):
+    """Cắt → reframe blur → trộn audio → burn phụ đề → loudnorm, bằng ffmpeg thật."""
+    from src.infrastructure.media.renderer import FfmpegRenderer, RenderRequest
+
+    voice = tmp_path / "voice.wav"
+    bg = tmp_path / "bg.wav"
+    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=220:duration=4", str(voice)])
+    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=90:duration=4", str(bg)])
+
+    out = FfmpegRenderer().render(
+        RenderRequest(
+            source_video=landscape_video,
+            voice_audio=voice,
+            background_audio=bg,
+            subtitle_cues=[(0.0, 2.0, "Cpk thấp vì máy trôi."), (2.0, 3.8, "Không phải vì dung sai.")],
+            start_sec=1.0,
+            end_sec=5.0,
+            work_dir=tmp_path / "work",
+            output=tmp_path / "final.mp4",
+            attribution_text="Nguồn: Vendor GmbH (CC BY 4.0)",
+            font_name="DejaVu Sans",
+        )
+    )
+
+    info = ffmpeg.probe(out)
+    assert info.aspect == pytest.approx(9 / 16, abs=0.01)
+    assert info.has_audio and info.has_video
+    assert out.stat().st_size > 0
+
+
+@skip_no_ffmpeg
+def test_render_bo_qua_reframe_khi_nguon_da_doc(portrait_video, tmp_path):
+    """Tiết kiệm một lần encode và tránh giảm chất lượng vô ích (G2.12)."""
+    from src.domain.production.value_objects import AspectRatio
+    from src.infrastructure.media.renderer import FfmpegRenderer, RenderRequest
+
+    voice = tmp_path / "voice.wav"
+    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=220:duration=2", str(voice)])
+
+    out = FfmpegRenderer().render(
+        RenderRequest(
+            source_video=portrait_video,
+            voice_audio=voice,
+            background_audio=None,  # không có nền dùng được
+            subtitle_cues=[(0.0, 1.5, "Đã dọc sẵn")],
+            start_sec=0.0,
+            end_sec=2.0,
+            work_dir=tmp_path / "w2",
+            output=tmp_path / "final2.mp4",
+            source_aspect=AspectRatio(1080, 1920),
+            font_name="DejaVu Sans",
+        )
+    )
+    assert not (tmp_path / "w2" / "framed.mp4").exists()  # không hề reframe
+    assert ffmpeg.probe(out).aspect == pytest.approx(9 / 16, abs=0.01)
+
+
+@skip_no_ffmpeg
+def test_render_dung_lai_khi_font_thieu_dau_tieng_viet(portrait_video, tmp_path):
+    """Không để video render xong với chữ sai font (F2.2)."""
+    from src.infrastructure.media.renderer import FfmpegRenderer, RenderRequest
+
+    voice = tmp_path / "v.wav"
+    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=220:duration=2", str(voice)])
+
+    with pytest.raises(GlyphMissing):
+        FfmpegRenderer().render(
+            RenderRequest(
+                source_video=portrait_video,
+                voice_audio=voice,
+                background_audio=None,
+                subtitle_cues=[(0.0, 1.5, VIETNAMESE_GLYPH_PROBE)],
+                start_sec=0.0,
+                end_sec=2.0,
+                work_dir=tmp_path / "w3",
+                output=tmp_path / "final3.mp4",
+                font_name="Font Khong Ton Tai 999",
+            )
+        )
