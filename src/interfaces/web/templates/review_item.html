@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Duyệt item #{{ item.id }}</h1>
+<p class="sub">
+  {{ item.title_original or "(chưa có tiêu đề gốc)" }} ·
+  <a href="{{ item.url.value }}" target="_blank" rel="noopener">nguồn gốc</a> ·
+  công duyệt dự kiến {{ expected[0] }}–{{ expected[1] }} phút
+</p>
+
+<div class="row" style="align-items:start">
+  <div>
+    {% if video_url %}
+      <video controls preload="metadata" src="{{ video_url }}"></video>
+      <p class="sub">{{ item.path_output.relative_path }}</p>
+    {% else %}
+      <div class="card empty">Chưa có file thành phẩm — item chưa qua bước render.</div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card">
+      <h2 style="margin-top:0">Kịch bản tiếng Việt</h2>
+      {% if item.script_vi %}
+        <p style="white-space:pre-wrap">{{ item.script_vi }}</p>
+        <p class="sub">
+          Phụ đề trùng nội dung với lời lồng tiếng — có chủ ý: hai văn bản khác nhau
+          làm người xem rất mệt, còn trùng nhau thì hai kênh củng cố nhau.
+        </p>
+      {% else %}
+        <p class="empty">Chưa có kịch bản.</p>
+      {% endif %}
+    </div>
+
+    {% if source %}
+    <div class="card">
+      <h2 style="margin-top:0">Nguồn và quyền</h2>
+      <p>
+        <a href="{{ source.url.value }}" target="_blank" rel="noopener">{{ source.url.host }}</a>
+        · <code>{{ source.platform }}</code> · <code>{{ source.audio_lang }}</code>
+      </p>
+      {% if source.evidence and source.evidence.attribution_text %}
+        <p class="sub">Ghi nguồn bắt buộc hiện trong video:</p>
+        <p><code>{{ source.evidence.attribution_text }}</code></p>
+      {% endif %}
+      {% if source.has_baked_watermark %}
+        <div class="note legal">
+          Nguồn có watermark dán cứng → <b>không đăng lên TikTok</b>. Watermark gốc
+          phải giữ nguyên, không xoá.
+        </div>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<h2>Cần kiểm trước khi duyệt</h2>
+<div class="card">
+  <ul style="margin:0; padding-left:20px">
+    <li>Chữ tiếng Việt có dấu hiện đúng font, không ô vuông, không lệch kiểu chữ.</li>
+    <li>Lời đọc khớp hình, không tràn quá khung đoạn.</li>
+    <li>Nền tiếng máy còn nghe được, không bị giọng đọc che hết.</li>
+    <li>Số liệu trong lời đọc đúng như nguồn nói — không có con số nào tự thêm.</li>
+    <li>Watermark và credit gốc còn nguyên.</li>
+    <li>Nội dung là <b>viết lại</b>, không phải dịch sát nguyên văn.</li>
+  </ul>
+</div>
+
+<form class="card" method="post" action="/web/review/{{ item.id }}/approve">
+  <div class="row">
+    <div>
+      <label for="actor">Người duyệt</label>
+      <input id="actor" name="actor" type="text" required placeholder="ho.ten">
+    </div>
+    <div>
+      <label for="notes">Ghi chú (bắt buộc nếu từ chối hoặc trả về viết lại)</label>
+      <input id="notes" name="notes" type="text">
+    </div>
+  </div>
+  <div class="actions">
+    <button type="submit" formaction="/web/review/{{ item.id }}/approve">Duyệt — cho phép đăng</button>
+    <button type="submit" class="ghost" formaction="/web/review/{{ item.id }}/rewrite">
+      Trả về viết lại kịch bản
+    </button>
+    <button type="submit" class="danger" formaction="/web/review/{{ item.id }}/reject">
+      Từ chối hẳn
+    </button>
+  </div>
+  <p class="sub" style="margin-bottom:0">
+    Lý do trả về viết lại được đưa thẳng vào prompt cho lần viết sau — viết cụ thể
+    thì bản sau khá hơn, viết &ldquo;chưa ổn&rdquo; thì không.
+  </p>
+</form>
+{% endblock %}

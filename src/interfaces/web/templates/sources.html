@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Nguồn đã khai báo</h1>
+<p class="sub">
+  Đây là kiểm soát pháp lý cốt lõi của hệ thống: pipeline từ chối tải video nếu
+  nguồn cha không ở trạng thái <code>approved</code>.
+</p>
+
+<p>
+  {% for s in statuses %}
+  <a href="/web/sources?status={{ s.value }}"
+     class="pill {% if s == status %}ok{% endif %}">{{ s.value }}</a>
+  {% endfor %}
+</p>
+
+<div class="scroll">
+<table>
+  <thead>
+    <tr>
+      <th>#</th><th>Nguồn</th><th>Nền tảng</th><th>Loại</th>
+      <th>Ngôn ngữ</th><th>Quyền</th><th>Bằng chứng</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for s in sources %}
+    <tr>
+      <td class="num">{{ s.id }}</td>
+      <td>
+        <a href="{{ s.url.value }}" target="_blank" rel="noopener">{{ s.url.host }}</a>
+        {% if s.display_name %}<br><span class="sub">{{ s.display_name }}</span>{% endif %}
+        {% if not s.ownership_is_verifiable %}
+          <br><span class="pill bad">thiếu external_owner_id</span>
+        {% endif %}
+      </td>
+      <td>
+        <code>{{ s.platform }}</code>
+        {% if s.has_baked_watermark %}<br><span class="pill warn">watermark dán cứng</span>{% endif %}
+      </td>
+      <td><code>{{ s.kind }}</code></td>
+      <td>
+        <code>{{ s.audio_lang }}</code>
+        <br><span class="sub">duyệt {{ s.expected_review_minutes[0] }}–{{ s.expected_review_minutes[1] }}′</span>
+      </td>
+      <td>
+        {% if s.scope.may_modify_audio %}<span class="pill ok">sửa audio</span>{% endif %}
+        {% if s.scope.may_translate %}<span class="pill ok">dịch</span>{% endif %}
+        {% if s.scope.may_subtitle %}<span class="pill ok">phụ đề</span>{% endif %}
+        {% if s.scope.may_republish %}<span class="pill ok">đăng lại</span>{% endif %}
+        {% if s.scope.may_commercial_use %}<span class="pill ok">thương mại</span>{% endif %}
+        {% if not s.scope.may_modify_audio %}<span class="pill bad">chưa được sửa audio</span>{% endif %}
+      </td>
+      <td>
+        {% if s.evidence %}
+          <code>{{ s.evidence.license_type }}</code><br>
+          <span class="sub">{{ s.evidence.evidence_ref }}</span>
+        {% else %}
+          <span class="sub">chưa có</span>
+        {% endif %}
+      </td>
+    </tr>
+    {% if s.status.value == 'pending' %}
+    <tr>
+      <td></td>
+      <td colspan="6">
+        <form method="post" action="/web/sources/{{ s.id }}/approve">
+          <div class="row">
+            <div>
+              <label>Người duyệt</label>
+              <input name="actor" type="text" required placeholder="ho.ten">
+            </div>
+            <div>
+              <label>Loại license</label>
+              <select name="license_type">
+                {% for lt in license_types %}<option value="{{ lt.value }}">{{ lt.value }}</option>{% endfor %}
+              </select>
+            </div>
+            <div>
+              <label>Bằng chứng (link điều khoản / file email / số hợp đồng)</label>
+              <input name="evidence_ref" type="text" required>
+            </div>
+            <div>
+              <label>Chuỗi ghi nguồn (bắt buộc với CC BY)</label>
+              <input name="attribution_text" type="text">
+            </div>
+          </div>
+          <div class="checks">
+            <label><input type="checkbox" name="may_translate" value="true"> Được dịch</label>
+            <label><input type="checkbox" name="may_modify_audio" value="true"> <b>Được sửa audio</b></label>
+            <label><input type="checkbox" name="may_subtitle" value="true"> Được gắn phụ đề</label>
+            <label><input type="checkbox" name="may_republish" value="true"> Được đăng lại</label>
+            <label><input type="checkbox" name="may_commercial_use" value="true"> Được dùng thương mại</label>
+          </div>
+          <div class="note legal">
+            Quyền &ldquo;được dùng lại&rdquo; <b>không</b> suy ra quyền sửa audio. Lồng tiếng cần
+            <code>may_modify_audio</code>, <code>may_translate</code> và <code>may_subtitle</code> —
+            thiếu một trong ba thì nguồn tải được nhưng dừng ở bước viết kịch bản.
+          </div>
+          <div class="actions"><button type="submit">Duyệt nguồn này</button></div>
+        </form>
+      </td>
+    </tr>
+    {% endif %}
+  {% else %}
+    <tr><td colspan="7" class="empty">Không có nguồn nào ở trạng thái {{ status.value }}.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Khai báo nguồn mới</h2>
+<form class="card" method="post" action="/web/sources">
+  <div class="row">
+    <div>
+      <label for="s-url">URL nguồn (kênh, playlist, trang tác giả, hoặc một video)</label>
+      <input id="s-url" name="url" type="url" required>
+    </div>
+    <div>
+      <label for="s-actor">Người khai báo</label>
+      <input id="s-actor" name="actor" type="text" value="web" required>
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label for="s-platform">Nền tảng</label>
+      <select id="s-platform" name="platform">
+        {% for p in platforms %}<option value="{{ p.value }}">{{ p.value }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="s-kind">Loại nguồn</label>
+      <select id="s-kind" name="kind">
+        {% for k in kinds %}<option value="{{ k.value }}">{{ k.value }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="s-lang">Ngôn ngữ audio</label>
+      <input id="s-lang" name="audio_lang" type="text" value="en">
+    </div>
+    <div>
+      <label for="s-owner">Id chủ kênh phía nền tảng</label>
+      <input id="s-owner" name="external_owner_id" type="text"
+             placeholder="UC... (YouTube) · sec_uid (Douyin)">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label for="s-name">Tên hiển thị</label>
+      <input id="s-name" name="display_name" type="text">
+    </div>
+    <div>
+      <label for="s-topics">Chủ đề (cách nhau bằng dấu phẩy)</label>
+      <input id="s-topics" name="topics" type="text" placeholder="spc, msa, vision">
+    </div>
+  </div>
+  <label for="s-notes">Ghi chú</label>
+  <textarea id="s-notes" name="notes"></textarea>
+  <div class="note">
+    <b>Id chủ kênh là bắt buộc</b> với nguồn dạng bao (kênh, playlist, trang tác giả,
+    website, RSS): duyệt <i>một</i> kênh không mở quyền cho <i>cả</i> nền tảng. Thiếu id
+    thì không xác minh được video có thuộc nguồn này, và URL nạp vào sẽ bị chặn.
+    Riêng <code>single-url</code> không cần, vì khớp chính xác URL đã là xác minh.
+  </div>
+  <div class="actions"><button type="submit">Khai báo (vào trạng thái pending)</button></div>
+</form>
+{% endblock %}

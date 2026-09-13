@@ -6,8 +6,12 @@ thái. Không có quy tắc nghiệp vụ nào ở đây — quy tắc nằm tro
 
 from __future__ import annotations
 
-from fastapi import FastAPI, Request
+import base64
+import hmac
+
+from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from src.domain.errors import (
     DomainError,
@@ -17,7 +21,8 @@ from src.domain.errors import (
     LicenseViolation,
 )
 from src.interfaces.api.routers import health, items, sources
-from src.shared.config import get_settings
+from src.interfaces.web import routes as web_routes
+from src.shared.config import Settings, get_settings
 from src.shared.logging import configure_logging, get_logger
 
 log = get_logger(__name__)
@@ -39,8 +44,54 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(sources.router)
     app.include_router(items.router)
+    app.include_router(web_routes.router)
+    _install_basic_auth(app, settings)
+    _mount_media(app, settings)
     _install_error_handlers(app)
     return app
+
+
+def _install_basic_auth(app: FastAPI, settings: Settings) -> None:
+    """Basic auth cho mặt tiền web và file media.
+
+    ``/healthz`` và ``/readyz`` **luôn mở**: nếu health check phải mang credential
+    thì một lần đổi mật khẩu là container bị coi là chết và restart vô hạn.
+    """
+    if not settings.web.enabled:
+        log.warning(
+            "web.auth.disabled",
+            reason="chưa đặt WEB_USER/WEB_PASSWORD — chỉ chấp nhận được ở dev",
+        )
+        return
+
+    expected = "Basic " + base64.b64encode(
+        f"{settings.web.user}:{settings.web.password}".encode()
+    ).decode()
+
+    @app.middleware("http")
+    async def _auth(request: Request, call_next):
+        if request.url.path in ("/healthz", "/readyz"):
+            return await call_next(request)
+        header = request.headers.get("authorization", "")
+        # compare_digest: so sánh chuỗi bằng `==` để lộ thời gian theo số ký tự khớp
+        if not hmac.compare_digest(header, expected):
+            return Response(
+                status_code=401,
+                content="Cần đăng nhập.",
+                headers={"WWW-Authenticate": 'Basic realm="Q One Media"'},
+            )
+        return await call_next(request)
+
+
+def _mount_media(app: FastAPI, settings: Settings) -> None:
+    """Phục vụ file thành phẩm cho trình duyệt, **chỉ đọc, chỉ thư mục output**.
+
+    Không mount cả MEDIA_ROOT: ``source/`` chứa video gốc của người khác và
+    ``work/`` chứa file trung gian — không có lý do gì để chúng ra được HTTP.
+    """
+    output = settings.paths.output
+    output.mkdir(parents=True, exist_ok=True)
+    app.mount("/media/output", StaticFiles(directory=str(output)), name="media")
 
 
 def _install_error_handlers(app: FastAPI) -> None:

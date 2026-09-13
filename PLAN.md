@@ -12,11 +12,11 @@
 
 | | |
 |---|---|
-| Mốc hiện tại | **G2 đang làm** (G2.1–G2.5 xong) · G0 vẫn mở, không chặn code |
-| Tiến độ tổng | ~25% |
+| Mốc hiện tại | **G2 + GW gần xong** · G0 vẫn mở, không chặn code |
+| Tiến độ tổng | ~55% code; các bước cần GPU/credential chưa chạy thật |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
-| Đã kiểm chứng | 112 unit test + 12 integration test xanh; API `/readyz` 200; vòng đời license gate chạy đầu-cuối qua HTTP |
-| Việc tiếp theo | G2.6 (worker ASR + Demucs) — nhưng cần G1.1 vendor VideoLingo trước |
+| Đã kiểm chứng | 181 unit + 40 integration test xanh; vòng đời license gate chạy đầu-cuối qua HTTP **và qua form web**; ffmpeg/libass test với binary thật |
+| Việc tiếp theo | G2.13 render + nối handler worker; rồi G0.10 (GPU) để chạy thật |
 
 ---
 
@@ -79,13 +79,13 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [x] **G2.3** `src/interfaces/api/` — hộp thư URL, CRUD `sources`, **license gate** + xác minh chủ sở hữu
 - [~] **G2.4** `src/infrastructure/ingest/ytdlp.py` — wrapper + probe metadata xong; ưu tiên khẩn cho Douyin xong. **Chưa test trên URL Douyin thật** (G0.3)
 - [x] **G2.5** Job queue trên Postgres (`FOR UPDATE SKIP LOCKED`) + thu hồi việc của worker đã chết
-- [ ] **G2.6** Worker: ASR (WhisperX) + Demucs
-- [ ] **G2.7** Chọn đoạn bằng LLM (prompt tiêu chí kỹ thuật, không phải "điểm cười")
-- [ ] **G2.8** Viết kịch bản Việt + glossary + **ngân sách âm tiết theo cảnh**
-- [ ] **G2.9** `src/infrastructure/tts/` — adapter VoxCPM2, cùng port cho FPT.AI
-- [ ] **G2.10** Forced alignment: kịch bản đã biết ↔ audio TTS
-- [ ] **G2.11** Trộn audio: Demucs + sidechain duck + `loudnorm`
-- [ ] **G2.12** Reframe **có điều kiện** (bỏ qua nếu nguồn đã 9:16)
+- [~] **G2.6** Adapter WhisperX + Demucs đã viết; **chưa chạy với model thật** (cần G0.10)
+- [~] **G2.7** Prompt + kiểm đầu ra xong; **chưa gọi API thật**
+- [~] **G2.8** Prompt + ngân sách âm tiết xong; glossary chờ G1.3
+- [~] **G2.9** VoxCPM2 + FPT.AI sau cùng port xong; **chưa chạy model thật** (G0.5)
+- [~] **G2.10** `align_known_text()` + gộp dòng phụ đề xong; chưa chạy model thật
+- [x] **G2.11** Trộn audio qua Easel `audio_mix` (nền −20 dB) + `loudnorm`
+- [x] **G2.12** Reframe có điều kiện, chế độ `blur` — test với ffmpeg thật
 - [ ] **G2.13** Render: burn ASS + intro/outro + thẻ ghi nguồn
 - [ ] **G2.14** Gate duyệt của người — use case xong ở G2.3; mặt tiền web ở **GW** bên dưới
 - [ ] **G2.15** Workflow n8n nối các bước
@@ -96,27 +96,27 @@ Vì sao cần, không phải cho đẹp: **gate duyệt của người là bắt
 
 Quyết định kỹ thuật: **Jinja2 + HTMX server-rendered**, không SPA — xem D21. Sống ở `src/interfaces/web/`, dùng lại đúng use case đã có, **không thêm một dòng nghiệp vụ nào**.
 
-- [ ] **GW.1** Trang khai báo + duyệt nguồn *(làm sớm: dùng được ngay, phục vụ G0.1–G0.2)*
-- [ ] **GW.2** Trang soát transcript ngoại ngữ (bước ⑥ của pipeline)
-- [ ] **GW.3** Trang duyệt video: phát video, đọc phụ đề, approve / reject / trả về viết lại
-- [ ] **GW.4** Dashboard tối giản: đếm item theo bước + hàng đợi việc + công duyệt dự kiến
-- [ ] **GW.5** Phục vụ file media cho trình duyệt (`media/output`, chỉ đọc)
-- [ ] **GW.6** Xác thực tối giản: basic auth hoặc token dùng chung *(prod đã bind `127.0.0.1`)*
+- [x] **GW.1** Trang khai báo + duyệt nguồn — dùng được ngay hôm nay
+- [ ] **GW.2** Trang soát transcript ngoại ngữ (bước ⑥) — chờ có transcript thật
+- [x] **GW.3** Trang duyệt video: phát video, đọc kịch bản, approve / reject / trả về viết lại
+- [x] **GW.4** Dashboard: item theo từng bước + công duyệt tồn + hộp thư URL
+- [x] **GW.5** Phục vụ `media/output` chỉ đọc; `source/` và `work/` không ra HTTP
+- [x] **GW.6** Basic auth (`WEB_USER`/`WEB_PASSWORD`), **bắt buộc ở prod**; `/healthz`+`/readyz` luôn mở
 
 **Không làm:** CMS, quản lý người dùng/phân quyền, trang phân tích engagement. 2–5 người nội bộ.
 
 ### G3 — Publish YouTube (tuần 5–7)
 
 - [ ] **G3.1** GCP project + OAuth consent + credential
-- [ ] **G3.2** `src/infrastructure/publish/` — adapter sau port `VideoPublisher` (port đã có ở G2.3)
-- [ ] **G3.3** Adapter YouTube Data API (`videos.insert`, 100/ngày)
+- [x] **G3.2** `src/infrastructure/publish/` — registry bỏ qua nền tảng chưa cấu hình
+- [~] **G3.3** Adapter YouTube (resumable upload, mặc định `private`); **chờ credential G3.1**
 - [ ] **G3.4** Video công khai đầu tiên
 
 ### G4 — Facebook (tuần 7–9)
 
 - [ ] **G4.1** Page + Business Manager + app
 - [ ] **G4.2** Thử ngoại lệ App Review cho app nội bộ; nếu không thì nộp review
-- [ ] **G4.3** Adapter Graph API cho Reels
+- [~] **G4.3** Adapter Facebook Reels (3 pha start/upload/finish); **chờ Page + token G4.1**
 
 ### G5 — Đánh giá GĐ1 (tuần 9–11)
 
@@ -196,6 +196,9 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D22 | Theo dõi pipeline/retry/thông báo dùng **n8n**, không tự viết | n8n đã trong stack và có UI sẵn. Tự viết lại là trùng việc | 13/09 |
 | D23 | **Không vendor gì từ VideoLingo**, gọi `whisperx`/`demucs` trực tiếp | Bề mặt dùng lại được thật ra nhỏ: prompt của họ là *dịch từng câu*, còn GĐ1 *viết lại*; phần Demucs/WhisperX chỉ là ~50 dòng keo quanh thư viện đã pin sẵn | 13/09 |
 | D24 | Alembic là nguồn duy nhất của schema, `init/` chỉ còn schema n8n | Hai bản DDL song song chắc chắn lệch nhau; lệch ở `sources` là lệch ở kiểm soát pháp lý | 13/09 |
+| D25 | Mặt tiền web **không có JavaScript nào** (form POST + redirect), bỏ cả HTMX | Kế hoạch ghi "Jinja2 + HTMX" nhưng khi viết thì form đủ. Trang chạy được khi nhà máy không có internet ra ngoài — giá trị thật cho công cụ on-prem | 14/09 |
+| D26 | Chỉ mount `media/output` ra HTTP, không mount cả `MEDIA_ROOT` | `source/` chứa video gốc của người khác, `work/` chứa file trung gian — không có lý do gì để chúng ra được HTTP | 14/09 |
+| D27 | `WEB_USER`/`WEB_PASSWORD` **bắt buộc ở prod**, chặn ngay khi đọc config | Không tin vào việc bind `127.0.0.1`: một lần thêm reverse proxy là trang duyệt nội dung thành công khai, và không ai nhận ra | 14/09 |
 
 ---
 

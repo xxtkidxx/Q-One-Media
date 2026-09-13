@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>{{ title }}</h1>
+<div class="note legal">
+  <p style="margin:0">{{ detail }}</p>
+</div>
+{% if hint %}<p class="sub">{{ hint }}</p>{% endif %}
+<div class="actions">
+  <a href="/web"><button class="ghost" type="button">Về bảng điều khiển</button></a>
+  <a href="/web/sources"><button class="ghost" type="button">Quản lý nguồn</button></a>
+</div>
+{% endblock %}

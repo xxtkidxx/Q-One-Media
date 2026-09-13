@@ -73,6 +73,22 @@ class TTSSettings:
 
 
 @dataclass(frozen=True)
+class WebSettings:
+    """Xác thực cho mặt tiền web nội bộ.
+
+    Để trống ở dev thì không hỏi mật khẩu — tiện, và dev chỉ mở ở localhost.
+    Ở prod thì **bắt buộc**: xem Settings.__post_init__.
+    """
+
+    user: str | None = None
+    password: str | None = None
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.user and self.password)
+
+
+@dataclass(frozen=True)
 class PublishSettings:
     """``enabled=False`` là kill-switch an toàn: chỉ chặn thêm, không mở thêm."""
 
@@ -95,11 +111,21 @@ class Settings:
     llm: LLMSettings
     tts: TTSSettings
     publish: PublishSettings
+    # Có mặc định để thêm trường mới không làm vỡ mọi chỗ dựng Settings.
+    # An toàn vì __post_init__ vẫn từ chối prod khi chưa đặt WEB_USER/WEB_PASSWORD.
+    web: WebSettings = field(default_factory=WebSettings)
     paths: MediaPaths = field(init=False)
 
     def __post_init__(self) -> None:
         if self.app_env not in ("dev", "prod", "test"):
             raise ConfigError(f"APP_ENV phải là dev|prod|test, nhận {self.app_env!r}")
+        if self.app_env == "prod" and not self.web.enabled:
+            # Chặn ở đây thay vì tin vào việc bind 127.0.0.1: một lần thêm reverse
+            # proxy là trang duyệt nội dung thành công khai, và không ai nhận ra.
+            raise ConfigError(
+                "APP_ENV=prod bắt buộc có WEB_USER và WEB_PASSWORD — "
+                "mặt tiền web cho phép duyệt và publish nội dung"
+            )
         object.__setattr__(self, "paths", MediaPaths(self.media_root))
 
     @property
@@ -126,6 +152,10 @@ def load_settings() -> Settings:
             voice_ref=os.environ.get("VOXCPM_VOICE_REF") or None,
             fptai_api_key=os.environ.get("FPTAI_API_KEY") or None,
             measured_rate=_env_float("TTS_SYLLABLES_PER_SEC"),
+        ),
+        web=WebSettings(
+            user=os.environ.get("WEB_USER") or None,
+            password=os.environ.get("WEB_PASSWORD") or None,
         ),
         publish=PublishSettings(
             enabled=_env_bool("PUBLISH_ENABLED", False),

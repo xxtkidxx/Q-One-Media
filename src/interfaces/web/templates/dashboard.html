@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Bảng điều khiển</h1>
+<p class="sub">Item theo từng bước của pipeline. Ô có số khác 0 là nơi công việc đang nằm.</p>
+
+<div class="grid">
+  <div class="tile {% if review_count == 0 %}zero{% endif %}">
+    <div class="n">{{ review_count }}</div>
+    <div class="k">Chờ người duyệt</div>
+  </div>
+  <div class="tile {% if review_minutes == 0 %}zero{% endif %}">
+    <div class="n">{{ review_minutes }}<span style="font-size:14px"> phút</span></div>
+    <div class="k">Công duyệt tồn</div>
+  </div>
+  <div class="tile {% if pending_sources == 0 %}zero{% endif %}">
+    <div class="n">{{ pending_sources }}</div>
+    <div class="k">Nguồn chờ duyệt</div>
+  </div>
+  <div class="tile {% if approved_sources == 0 %}zero{% endif %}">
+    <div class="n">{{ approved_sources }}</div>
+    <div class="k">Nguồn đã duyệt</div>
+  </div>
+</div>
+
+{% if review_minutes > 600 %}
+<div class="note">
+  Công duyệt tồn đã hơn 10 giờ. Ràng buộc thật của hệ thống này là thời gian người,
+  không phải tiền — nên giảm nhịp nạp URL mới thay vì để hàng đợi dài thêm.
+</div>
+{% endif %}
+
+<h2>Nạp URL video</h2>
+<form class="card" method="post" action="/web/items">
+  <div class="row">
+    <div>
+      <label for="url">URL video</label>
+      <input id="url" name="url" type="url" required
+             placeholder="https://www.youtube.com/watch?v=...">
+    </div>
+    <div>
+      <label for="actor">Người nạp</label>
+      <input id="actor" name="actor" type="text" value="web" required>
+    </div>
+  </div>
+  <p class="sub" style="margin:10px 0 0">
+    Nguồn cha phải được khai báo và duyệt license trước. URL không thuộc nguồn nào
+    đã khai báo sẽ bị từ chối — hệ thống không tự tạo nguồn, vì khai báo nguồn là
+    việc có trách nhiệm pháp lý.
+  </p>
+  <div class="actions"><button type="submit">Nạp vào hộp thư</button></div>
+</form>
+
+<h2>Dòng chảy pipeline</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>Bước</th><th style="width:90px">Số item</th><th>Ghi chú</th></tr></thead>
+  <tbody>
+  {% for stage, n in pipeline %}
+    <tr>
+      <td><code>{{ stage }}</code></td>
+      <td class="num">{{ n }}</td>
+      <td class="sub" style="margin:0">
+        {% if stage.value == 'transcript_review' %}Người soát transcript — bắt buộc, nhất là nguồn tiếng Trung
+        {% elif stage.value == 'human_review' %}<a href="/web/review">Gate duyệt của người — bắt buộc</a>
+        {% elif stage.value == 'approved' %}Đã duyệt, chờ publish
+        {% elif stage.value == 'published' %}Đã đăng
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<h2>Dừng lại</h2>
+<div class="scroll">
+<table>
+  <thead><tr><th>Trạng thái</th><th style="width:90px">Số item</th><th>Nghĩa là gì</th></tr></thead>
+  <tbody>
+  {% for stage, n in blocked %}
+    <tr>
+      <td>
+        <span class="pill {% if stage.value == 'license_blocked' %}bad{% else %}warn{% endif %}">
+          {{ stage }}
+        </span>
+      </td>
+      <td class="num">{{ n }}</td>
+      <td class="sub" style="margin:0">
+        {% if stage.value == 'license_blocked' %}Nguồn cha chưa có quyền. Vẫn lưu lại để thấy nhu cầu thật — biết nên đi xin phép hãng nào trước
+        {% elif stage.value == 'failed' %}Lỗi kỹ thuật, chạy lại được
+        {% else %}Người duyệt đã từ chối
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>Chờ duyệt</h1>
+<p class="sub">
+  Gate duyệt của người là bắt buộc ở Giai đoạn 1. Cột công duyệt dự kiến tính theo
+  ngôn ngữ nguồn — nguồn tiếng Trung tốn khoảng gấp đôi tiếng Anh vì transcript
+  sai nhiều hơn.
+</p>
+
+<div class="scroll">
+<table>
+  <thead>
+    <tr><th>#</th><th>Tiêu đề gốc</th><th>Đoạn</th><th>Khung</th><th>Công duyệt</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for e in entries %}
+    <tr>
+      <td class="num">{{ e.item.id }}</td>
+      <td>
+        {{ e.item.title_original or "(chưa có tiêu đề)" }}
+        <br><span class="sub">{{ e.item.url.host }}</span>
+      </td>
+      <td class="num">
+        {% if e.item.segment %}
+          {{ "%.1f"|format(e.item.segment.start_sec) }}–{{ "%.1f"|format(e.item.segment.end_sec) }}s
+          <br><span class="sub">{{ "%.0f"|format(e.item.segment.duration_sec) }}s</span>
+        {% else %}<span class="sub">—</span>{% endif %}
+      </td>
+      <td>
+        <code>{{ e.item.aspect_ratio or "?" }}</code>
+        {% if e.item.needs_reframe %}<br><span class="pill warn">cần reframe</span>{% endif %}
+      </td>
+      <td class="num">{{ e.expected_minutes[0] }}–{{ e.expected_minutes[1] }} phút</td>
+      <td><a href="/web/review/{{ e.item.id }}">Mở duyệt →</a></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="empty">
+      Không có item nào chờ duyệt. Hàng đợi trống là trạng thái tốt.
+    </td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}
