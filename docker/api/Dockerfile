@@ -1,5 +1,5 @@
 # API — hộp thư URL, license gate, job queue, publish dispatch.
-# Không cần GPU, không cần ffmpeg: mọi việc nặng do worker làm.
+# Không cần GPU. Production không cần ffmpeg (worker làm việc nặng); target dev có ffmpeg để chạy test.
 
 FROM python:3.11-slim AS base
 
@@ -21,6 +21,10 @@ ENV MEDIA_ROOT=/data/media
 
 # ---------- dev ----------
 FROM base AS dev
+# ffmpeg + font CHỈ có ở target dev: để chạy test tầng media mà không phải build
+# image worker (CUDA + torch, ~8 GB). Production của api không cần ffmpeg —
+# mọi việc nặng do worker làm.
+RUN apt-get update && apt-get install -y --no-install-recommends       ffmpeg fontconfig fonts-dejavu-core     && rm -rf /var/lib/apt/lists/*
 RUN pip install pytest pytest-asyncio httpx ruff
 EXPOSE 8000
 CMD ["uvicorn", "src.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

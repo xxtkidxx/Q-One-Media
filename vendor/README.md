@@ -19,20 +19,41 @@ Mỗi thư mục con **phải** có `ORIGIN.md` ghi đúng năm thứ:
 
 Đây vừa là nghĩa vụ license (Apache-2.0 yêu cầu giữ thông báo bản quyền và ghi nhận thay đổi), vừa là cách duy nhất để sau này biết mình đang lệch bao nhiêu so với upstream.
 
-## Dự kiến vendor (G1.1)
+## Đã vendor
 
-| Thư mục | Nguồn | License | Lấy gì |
+| Thư mục | Nguồn | License | Trạng thái |
 |---|---|---|---|
-| `videolingo/` | `Huanshere/VideoLingo` | Apache-2.0 | `core/_1_ytdlp.py`, `core/_2_asr.py`, `core/asr_backend/demucs_vl.py`, `core/_3_*`, `core/_4_*`, `core/_5_*`–`_7_*`, `core/_8_*`–`_12_*`, `core/tts_backend/custom_tts.py` |
-| `easel/` | `ZJU-REAL/Easel` | Apache-2.0 | `skills/shared/scripts/reframe.py`, `audio_mix.py`, `subtitle_ops.py`, `intro_outro.py` |
+| `easel/` | `ZJU-REAL/Easel` @ `16f068e4` | Apache-2.0 | ✅ `reframe.py`, `audio_mix.py`, `subtitle_ops.py` + `LICENSE` + `ORIGIN.md` |
 
-Các script Easel **độc lập hoàn toàn** — chỉ dùng thư viện chuẩn Python và gọi ffmpeg qua subprocess, không import chéo. Copy từng file là chạy được.
+## Không vendor VideoLingo — quyết định đã đổi (D23)
+
+Kế hoạch ban đầu là vendor `core/_1_ytdlp.py` … `core/_12_dub_to_vid.py`. Sau khi
+đọc source thì **không vendor gì từ VideoLingo**, vì bề mặt thật sự dùng lại được
+nhỏ hơn nhiều so với tưởng:
+
+- **Bước tải** (`_1_ytdlp.py`): ba vấn đề chặn — `pip install --upgrade` mỗi lần
+  tải, thư mục `output/` toàn cục, gắn cứng `config.yaml`. Đã tự viết
+  `src/infrastructure/ingest/ytdlp.py`.
+- **Prompt dịch** (`_3_*`, `_4_*`): VideoLingo dịch **từng câu sát nghĩa**. Giai
+  đoạn 1 của dự án này **không dịch mà viết lại** (đặc tả mục C bước ⑧) — bài toán
+  khác, nên prompt của họ không dùng được.
+- **Tách phụ đề theo ngữ nghĩa**: có giá trị, nhưng phụ đề ở đây sinh từ forced
+  alignment của **chính kịch bản mình viết** (F2.5), không phải từ câu dịch.
+- **Demucs và WhisperX** (`demucs_vl.py`, `_2_asr.py`): chỉ là ~50 dòng keo quanh
+  API của `demucs` và `whisperx` — hai thư viện đã pin trong
+  `docker/worker/requirements.txt`. Gọi thư viện trực tiếp sạch hơn là vendor keo
+  rồi bọc adapter quanh keo.
+
+Tham số nào mượn ý từ VideoLingo (ví dụ `htdemucs` với `shifts=1, overlap=0.25`,
+và cách cộng các stem không phải giọng làm nền) được **ghi nguồn trong docstring**
+của adapter tương ứng. Đó là ý tưởng, không phải code — không sinh nghĩa vụ
+license, nhưng ghi nguồn vẫn là việc nên làm.
 
 ## Không vendor
 
 - Tầng publish của Easel — nền tảng Trung Quốc, lại dùng browser automation.
 - Framework OpenClaw — thêm phụ thuộc không cần thiết.
-- VoiceStudio — AGPL-3.0. Dùng VoxCPM2 trực tiếp (cài qua pip trong worker image), không vendor.
+- VoiceStudio — AGPL-3.0. Dùng VoxCPM2 trực tiếp (cài qua pip trong worker image).
 
 ## Chữ ký đã xác minh (đọc trực tiếp source, 13/09/2026)
 

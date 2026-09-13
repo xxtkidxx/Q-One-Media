@@ -66,7 +66,7 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 
 ### G1 — Làm tay có công cụ (tuần 2–3)
 
-- [ ] **G1.1** Vendor code: VideoLingo + script Easel vào `vendor/` kèm `ORIGIN.md`
+- [x] **G1.1** Vendor `vendor/easel/` (3 script + LICENSE + ORIGIN.md). **Không vendor VideoLingo** — xem D23
 - [ ] **G1.2** Làm 5 video bằng tay, **mỗi nền tảng ít nhất 1**
 - [ ] **G1.3** Rút glossary EN↔VI và ZH↔VI từ corpus `research/nmi-scan/` → bảng `glossary`
 - [ ] **G1.4** Ghi lại thời gian thật mỗi video theo nền tảng và ngôn ngữ nguồn
@@ -194,6 +194,8 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D20 | Mapper viết tay, không để ORM map thẳng vào entity | Value object phải kiểm bất biến **cả khi** dữ liệu đến từ DB — một dòng hỏng nổ lúc đọc, không lẳng lặng qua gate | 13/09 |
 | D21 | Mặt tiền web là **Jinja2 + HTMX server-rendered**, không React/Vue | 2–5 người dùng nội bộ. SPA đòi npm + một Dockerfile + một container nữa mà không mua được gì; phần khó nhất là phát video, HTML thuần làm tốt nhất | 13/09 |
 | D22 | Theo dõi pipeline/retry/thông báo dùng **n8n**, không tự viết | n8n đã trong stack và có UI sẵn. Tự viết lại là trùng việc | 13/09 |
+| D23 | **Không vendor gì từ VideoLingo**, gọi `whisperx`/`demucs` trực tiếp | Bề mặt dùng lại được thật ra nhỏ: prompt của họ là *dịch từng câu*, còn GĐ1 *viết lại*; phần Demucs/WhisperX chỉ là ~50 dòng keo quanh thư viện đã pin sẵn | 13/09 |
+| D24 | Alembic là nguồn duy nhất của schema, `init/` chỉ còn schema n8n | Hai bản DDL song song chắc chắn lệch nhau; lệch ở `sources` là lệch ở kiểm soát pháp lý | 13/09 |
 
 ---
 

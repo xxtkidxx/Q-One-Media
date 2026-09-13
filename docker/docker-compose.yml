@@ -6,7 +6,7 @@
 # Mọi state nằm trong ./data/${APP_ENV}/ dưới dạng bind mount — KHÔNG dùng docker volume.
 # Xoá container/image không mất dữ liệu. Xoá ./data là mất.
 
-name: qone-${APP_ENV}
+name: qone-media-${APP_ENV}
 
 x-common-env: &common-env
   APP_ENV: ${APP_ENV}
