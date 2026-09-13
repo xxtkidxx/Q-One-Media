@@ -44,6 +44,15 @@ class SourceKind(StrEnum):
     RSS = "rss"
     SINGLE_URL = "single-url"
 
+    @property
+    def is_container(self) -> bool:
+        """Nguồn bao nhiều video, nên URL của item không trùng URL của nguồn.
+
+        Loại này cần xác minh chủ sở hữu bằng id lấy từ metadata — khớp theo
+        host là không đủ. ``single-url`` thì ngược lại: khớp chính xác là xong.
+        """
+        return self is not SourceKind.SINGLE_URL
+
 
 class ContentType(StrEnum):
     VIDEO = "video"

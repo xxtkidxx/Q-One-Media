@@ -30,6 +30,11 @@ CREATE TABLE sources (
     source_url      TEXT            NOT NULL UNIQUE,
     display_name    TEXT,
 
+    -- Id chu so huu phia nen tang: channel id YouTube (UC...), sec_uid Douyin,
+    -- page id Facebook. Bat buoc voi nguon dang bao (channel/playlist/...) vi
+    -- duyet MOT kenh khong mo quyen cho ca nen tang. Khop theo host la khong du.
+    external_owner_id TEXT,
+
     -- Ngôn ngữ audio/text của nguồn: chọn nhánh ASR, chiều glossary,
     -- và mức kỳ vọng công duyệt (zh tốn ~gấp đôi en).
     audio_lang      TEXT            NOT NULL DEFAULT 'en',

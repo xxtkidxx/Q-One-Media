@@ -48,6 +48,7 @@ def clock() -> FakeClock:
 
 
 def declare(uow, url=YT_CHANNEL, platform=Platform.YOUTUBE, kind=SourceKind.CHANNEL, **kw):
+    kw.setdefault("external_owner_id", "UCvendor0000000000000000")
     return declare_source(
         DeclareSourceCommand(url=url, platform=platform, kind=kind, **kw),
         uow=uow,

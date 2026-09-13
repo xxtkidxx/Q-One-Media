@@ -12,6 +12,7 @@ from datetime import datetime
 
 from src.domain.errors import (
     InvariantViolation,
+    OwnershipMismatch,
     ScopeNotGranted,
     SourceExpired,
     SourceNotApproved,
@@ -44,6 +45,11 @@ class Source:
     display_name: str | None = None
     audio_lang: Language = field(default_factory=lambda: Language("en"))
     has_baked_watermark: bool = False
+
+    # Id chủ sở hữu ở phía nền tảng: channel id YouTube (UC...), sec_uid Douyin,
+    # page id Facebook. Đây là thứ duy nhất xác minh được rằng một video thật sự
+    # thuộc nguồn đã duyệt — URL thì trùng host quá dễ.
+    external_owner_id: str | None = None
 
     status: ApprovalStatus = ApprovalStatus.PENDING
     evidence: LicenseEvidence | None = None
@@ -166,6 +172,43 @@ class Source:
             attribution_text=self.evidence.attribution_text,
             has_baked_watermark=self.has_baked_watermark,
         )
+
+    # ---------------- Xác minh quyền sở hữu ----------------
+
+    def claims(self, item_url: SourceUrl) -> bool:
+        """Nguồn này có *khả năng* bao trùm URL kia không — chỉ là bước lọc ứng viên.
+
+        Với ``single-url`` thì khớp chính xác nên câu trả lời là dứt khoát. Với
+        nguồn dạng bao (kênh, playlist, trang tác giả) thì cùng host mới chỉ là
+        ứng viên: phải gọi thêm ``assert_owns()`` với id lấy từ metadata.
+        """
+        if self.kind is SourceKind.SINGLE_URL:
+            return item_url.value.rstrip("/") == self.url.value.rstrip("/")
+        return item_url.host == self.url.host
+
+    @property
+    def ownership_is_verifiable(self) -> bool:
+        return self.kind is SourceKind.SINGLE_URL or bool(self.external_owner_id)
+
+    def assert_owns(self, external_owner_id: str | None) -> None:
+        """Xác minh video thuộc đúng nguồn đã duyệt, bằng id chủ kênh từ metadata.
+
+        Gọi sau khi lấy được metadata và **trước khi** xử lý tiếp. Nguồn dạng bao
+        mà chưa khai ``external_owner_id`` thì từ chối — thiếu cách xác minh là
+        một lý do hợp lệ để dừng, không phải lý do để cho qua.
+        """
+        if self.kind is SourceKind.SINGLE_URL:
+            return
+        if not self.external_owner_id:
+            raise OwnershipMismatch(
+                f"nguồn #{self.id} ({self.url.host}) là nguồn dạng {self.kind} nhưng chưa "
+                "khai external_owner_id — không xác minh được video có thuộc nguồn này"
+            )
+        if external_owner_id != self.external_owner_id:
+            raise OwnershipMismatch(
+                f"video thuộc chủ {external_owner_id!r}, còn nguồn #{self.id} đã duyệt là "
+                f"{self.external_owner_id!r} — duyệt một kênh không mở quyền cho cả nền tảng"
+            )
 
     # ---------------- Quyết định phụ ----------------
 

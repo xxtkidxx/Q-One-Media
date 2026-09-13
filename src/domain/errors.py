@@ -44,5 +44,15 @@ class ScopeNotGranted(LicenseViolation):
     """Nguồn đã approved nhưng phạm vi quyền không gồm việc đang định làm."""
 
 
+class OwnershipMismatch(LicenseViolation):
+    """Video không thuộc nguồn đã được duyệt.
+
+    Đây là lỗ dễ bỏ sót nhất của cả license gate: duyệt **một** kênh YouTube
+    không có nghĩa là được dùng **mọi** video trên youtube.com. Khớp theo host
+    chỉ cho ra *ứng viên*; quyền sở hữu thật phải xác minh bằng id chủ kênh lấy
+    từ metadata của nền tảng.
+    """
+
+
 class HumanReviewRequired(DomainError):
     """Chưa qua gate duyệt của người — Giai đoạn 1 bắt buộc."""

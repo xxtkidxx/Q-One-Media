@@ -41,6 +41,7 @@ class DeclareSourceCommand:
     content_type: ContentType = ContentType.VIDEO
     display_name: str | None = None
     audio_lang: str = "en"
+    external_owner_id: str | None = None
     has_baked_watermark: bool = False
     topics: tuple[str, ...] = ()
     notes: str | None = None
@@ -75,6 +76,7 @@ def declare_source(cmd: DeclareSourceCommand, *, uow: UnitOfWork, actor: str) ->
                 content_type=cmd.content_type,
                 display_name=cmd.display_name,
                 audio_lang=Language(cmd.audio_lang),
+                external_owner_id=cmd.external_owner_id,
                 has_baked_watermark=cmd.has_baked_watermark,
                 topics=cmd.topics,
                 notes=cmd.notes,

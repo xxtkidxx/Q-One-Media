@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from src.application.ports import Clock, UnitOfWork
-from src.domain.errors import DomainError, LicenseViolation
+from src.domain.errors import DomainError, LicenseViolation, OwnershipMismatch
 from src.domain.production.entities import Item
 from src.domain.scheduling.entities import (
     PRIORITY_NORMAL,
@@ -76,6 +76,14 @@ def submit_url(
         # ở đây, không phải sự cố — nên bắt đúng nhóm LicenseViolation và ghi lại.
         try:
             clearance = source.clear_for_download(now)
+            # Chặn sớm nếu nguồn dạng bao mà chưa khai id chủ kênh: không có cách
+            # xác minh thì việc tải chắc chắn sẽ bị từ chối ở bước sau, nên nói
+            # ngay tại đây thay vì để người dùng chờ một job rồi mới thấy lỗi.
+            if not source.ownership_is_verifiable:
+                raise OwnershipMismatch(
+                    f"nguồn #{source.id} ({source.url.host}) dạng {source.kind} chưa khai "
+                    "external_owner_id — bổ sung id chủ kênh rồi nạp lại URL"
+                )
         except LicenseViolation as exc:
             item = uow.items.add(Item.blocked(url=url, source_id=source.id, reason=str(exc)))
             assert item.id is not None

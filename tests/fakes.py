@@ -86,16 +86,15 @@ class FakeSourceRepository:
         return next((s for s in self._rows.values() if s.url.value == url.value), None)
 
     def find_owning(self, item_url: SourceUrl) -> Source | None:
-        """Khớp theo host, rồi ưu tiên nguồn có URL là tiền tố dài nhất.
+        """Uu tien nguon khop chinh xac (single-url), roi den nguon dang bao.
 
-        Bản thật (Postgres) cần khớp tinh hơn — theo channel id, theo user path.
-        Ở đây đủ để test quy tắc, và điều đó là chủ ý: fake không phải bản nháp
-        của production, nó là bản đơn giản nhất còn đúng nghiệp vụ.
+        Chi la buoc loc ung vien: quyen so huu that duoc xac minh bang
+        Source.assert_owns() voi id chu kenh lay tu metadata.
         """
-        candidates = [s for s in self._rows.values() if s.url.host == item_url.host]
+        candidates = [s for s in self._rows.values() if s.claims(item_url)]
         if not candidates:
             return None
-        return max(candidates, key=lambda s: len(s.url.value))
+        return max(candidates, key=lambda s: (not s.kind.is_container, len(s.url.value)))
 
     def list_by_status(self, status: ApprovalStatus, *, limit: int = 100) -> list[Source]:
         return [s for s in self._rows.values() if s.status is status][:limit]
