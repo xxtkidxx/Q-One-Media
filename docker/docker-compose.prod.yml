@@ -1,0 +1,52 @@
+# PROD override — code nằm trong image, không mount source, restart always,
+# chỉ mở port ra 127.0.0.1 (dùng reverse proxy nếu cần ra ngoài)
+# Dùng: docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --env-file .env.prod up -d
+
+services:
+  postgres:
+    restart: always
+    # Không mở port ra host ở prod — chỉ truy cập trong network của compose
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  api:
+    build:
+      target: prod
+    restart: always
+    # KHÔNG mount ../src — code đã nằm trong image, tránh lệch giữa image và host
+    volumes:
+      - ../data/prod/media:/data/media
+      - ../data/prod/logs:/data/logs
+    environment:
+      LOG_LEVEL: INFO
+      RELOAD: "false"
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers 2
+    ports:
+      - "127.0.0.1:${API_PORT:-8001}:8000"
+    logging: *logging
+
+  worker:
+    build:
+      target: prod
+    restart: always
+    volumes:
+      - ../data/prod/media:/data/media
+      - ../data/prod/logs:/data/logs
+      - ../data/models:/models
+    environment:
+      LOG_LEVEL: INFO
+    logging: *logging
+
+  n8n:
+    restart: always
+    environment:
+      N8N_LOG_LEVEL: warn
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER: ${N8N_USER}
+      N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD}
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5679}:5678"
+    logging: *logging

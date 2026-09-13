@@ -1,0 +1,38 @@
+# Worker — pin cứng để build lặp lại được.
+# Torch/torchaudio cài riêng trong Dockerfile (index cu124).
+
+# --- Thu nạp ---
+yt-dlp==2026.8.19
+
+# --- ASR + forced alignment ---
+# WhisperX: timestamp cấp từ ±50ms (vs ±500ms Whisper thuần).
+# Dùng cho 2 việc: transcript nguồn, và căn phụ đề Việt theo audio TTS.
+whisperx==3.3.1
+faster-whisper==1.1.0
+
+# --- Tách giọng khỏi tiếng máy ---
+# Bỏ stem giọng gốc, GIỮ stem tiếng máy làm nền (mục F2.4).
+demucs==4.0.1
+
+# --- TTS ---
+# VoxCPM2: Apache-2.0, có tiếng Việt, voice cloning + voice design.
+# Cài từ PyPI nếu có; nếu không thì vendor theo scripts/fetch_models.py.
+voxcpm==0.5.0
+
+# --- Xử lý media ---
+ffmpeg-python==0.2.0
+soundfile==0.12.1
+numpy==1.26.4
+
+# --- Hạ tầng ---
+psycopg[binary]==3.2.3
+sqlalchemy==2.0.36
+alembic==1.14.0
+pydantic==2.10.4
+pydantic-settings==2.7.0
+httpx==0.28.1
+tenacity==9.0.0
+structlog==24.4.0
+
+# --- LLM ---
+anthropic==0.42.0

@@ -1,0 +1,74 @@
+# ============================================================
+# RUNTIME DATA — nằm trong project có chủ ý (bind mount, không dùng docker volume)
+# để xoá docker không mất dữ liệu. Nhưng KHÔNG commit vào git.
+# ============================================================
+data/*
+!data/.gitkeep
+!data/dev/
+!data/prod/
+data/dev/*
+data/prod/*
+!data/dev/media/
+!data/prod/media/
+data/dev/media/*
+data/prod/media/*
+!data/*/media/*/.gitkeep
+!data/models/
+data/models/*
+!data/models/.gitkeep
+
+# ============================================================
+# Secrets
+# ============================================================
+.env
+.env.dev
+.env.prod
+.env.local
+*.pem
+*.key
+**/client_secret*.json
+**/*token*.json
+!**/*.example
+
+# ============================================================
+# Rác build / tooling — file .whl từng bị lẫn vào repo, đừng để lặp lại
+# ============================================================
+*.whl
+*.tar.gz
+*.zip
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.venv/
+venv/
+node_modules/
+
+# ============================================================
+# Media lẫn vào chỗ khác
+# ============================================================
+*.mp4
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.m4a
+*.srt
+*.ass
+!tests/fixtures/**
+
+# ============================================================
+# Hệ điều hành / editor
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.log
+
+# Thu muc scratch cua agent
+.scratch/
