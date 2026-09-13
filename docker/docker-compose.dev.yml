@@ -17,6 +17,7 @@ services:
       # pytest.ini phai co trong container, khong thi --strict-markers
       # khong chay va marker gpu/external/integration bi coi la loi chinh ta
       - ../pytest.ini:/app/pytest.ini:ro
+      - ../ruff.toml:/app/ruff.toml:ro
       - ../alembic:/app/alembic
       - ../alembic.ini:/app/alembic.ini:ro
       - ../data/dev/media:/data/media
@@ -38,6 +39,7 @@ services:
       # pytest.ini phai co trong container, khong thi --strict-markers
       # khong chay va marker gpu/external/integration bi coi la loi chinh ta
       - ../pytest.ini:/app/pytest.ini:ro
+      - ../ruff.toml:/app/ruff.toml:ro
       - ../alembic:/app/alembic
       - ../alembic.ini:/app/alembic.ini:ro
       - ../data/dev/media:/data/media

@@ -98,7 +98,7 @@ def transcribe(
             asr_options=asr_options,
         )
         result = model.transcribe(str(audio), batch_size=batch_size, language=language)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise AsrFailed(f"WhisperX transcribe thất bại: {type(exc).__name__}: {exc}") from exc
     finally:
         _free_vram()
@@ -144,7 +144,7 @@ def align_known_text(
             device,
             return_char_alignments=False,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise AsrFailed(f"forced alignment thất bại: {type(exc).__name__}: {exc}") from exc
     finally:
         _free_vram()

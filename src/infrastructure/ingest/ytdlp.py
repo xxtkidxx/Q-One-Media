@@ -87,7 +87,7 @@ class YtDlpProbe:
         try:
             with YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=False)
-        except Exception as exc:  # noqa: BLE001 — yt_dlp ném nhiều họ exception
+        except Exception as exc:
             raise _classify(exc) from exc
         return dict(info or {})
 
@@ -142,7 +142,7 @@ class YtDlpDownloader:
         try:
             with YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise _classify(exc) from exc
 
         info = dict(info or {})

@@ -8,14 +8,18 @@ Postgres, không GPU, không token nền tảng.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import ItemStage
 from src.domain.publishing.entities import Publication
-from src.domain.publishing.value_objects import PublishPlatform, PublishStatus, VideoMetadata
+from src.domain.publishing.value_objects import (
+    PublishPlatform,
+    PublishStatus,
+    VideoMetadata,
+)
 from src.domain.scheduling.entities import Job, JobStatus, JobTask
 from src.domain.sourcing.clearance import DownloadClearance, PublishClearance
 from src.domain.sourcing.entities import Source
@@ -194,7 +198,7 @@ class FakeJobRepository:
         if not pending:
             return None
         job = min(pending, key=lambda j: (j.priority, j.id or 0))
-        job.claim(worker=worker, at=datetime.now())
+        job.claim(worker=worker, at=datetime.now(UTC))
         return job
 
     def update(self, job: Job) -> None:

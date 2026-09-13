@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 
 from src.domain.errors import InvalidTransition, InvariantViolation
-from src.domain.production.value_objects import ItemStage
 from src.domain.publishing.entities import Publication
 from src.domain.publishing.policy import decide
 from src.domain.publishing.value_objects import (
@@ -15,7 +12,10 @@ from src.domain.publishing.value_objects import (
     PublishStatus,
     VideoMetadata,
 )
-from src.domain.sourcing.value_objects import LicenseEvidence, LicenseType, Platform, SourceUrl
+from src.domain.sourcing.value_objects import (
+    Platform,
+    SourceUrl,
+)
 from tests.unit.test_item_lifecycle import item_at_review
 from tests.unit.test_license_gate import NOW, approved_source
 

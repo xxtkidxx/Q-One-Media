@@ -5,7 +5,9 @@ Pipeline tự động hoá short video tiếng Việt cho **NMI Technologies Vi�
 - **Giai đoạn 1:** video nước ngoài đã khai báo → chọn lọc → biên tập → **lồng tiếng Việt + phụ đề** → publish YouTube/Facebook
 - **Giai đoạn 2:** bài viết nước ngoài đã khai báo → viết kịch bản gốc → ảnh + giọng → render → publish
 
-**Trạng thái: G0 — khung dự án đã dựng, chưa có code chạy được.**
+**Trạng thái:** lõi Giai đoạn 1 đã có code và test — license gate, hộp thư URL, hàng đợi việc,
+pipeline media, mặt tiền web nội bộ, adapter publish. Các bước cần GPU hoặc credential nền tảng
+(WhisperX, VoxCPM2, YouTube, Facebook) **chưa chạy thật**. Chi tiết: [PLAN.md](PLAN.md).
 
 ## Bắt đầu từ đâu
 
@@ -20,13 +22,20 @@ Pipeline tự động hoá short video tiếng Việt cho **NMI Technologies Vi�
 Mọi thứ trong Docker. **Không cài Python/ffmpeg/model lên máy host.**
 
 ```bash
-cp .env.dev.example .env.dev      # rồi điền: mật khẩu postgres, N8N_ENCRYPTION_KEY, ANTHROPIC_API_KEY
+cp .env.dev.example .env.dev      # điền: mật khẩu postgres, N8N_ENCRYPTION_KEY, ANTHROPIC_API_KEY
 make dev-up                       # API :8000 · n8n :5678
+make migrate                      # alembic upgrade head — BẮT BUỘC lần đầu
 make models                       # tải model vào data/models (~10 GB, chỉ một lần)
-make test                         # pytest, bỏ qua test cần GPU và API ngoài
+
+make test                         # unit test, < 1s, không cần DB/GPU/token
+make test-int                     # integration test trên Postgres + ffmpeg thật
+make lint                         # ruff
 make dev-logs                     # tail 50, since 5m
 make dev-down
 ```
+
+Mở trình duyệt vào **http://localhost:8000/web** — bảng điều khiển, khai báo/duyệt nguồn,
+soát transcript, duyệt video. API docs ở `/docs`.
 
 Production tách hoàn toàn — dữ liệu riêng, port riêng, chạy song song được với dev:
 
@@ -91,7 +100,9 @@ phạm vi quyền. Không có clearance thì không gọi được hàm. Xem `sr
 | Reframe 9:16 | **Easel `reframe.py`** chế độ `blur` | 1.002 | Apache-2.0 |
 | Trộn audio | **Easel `audio_mix.py`** + ffmpeg | 1.002 | Apache-2.0 |
 | Publish, license registry, hộp thư URL | Tự viết | — | — |
-| Điều phối | n8n self-host | — | — |
+| Mặt tiền web nội bộ | Jinja2 server-rendered, **không JavaScript** | — | — |
+| Điều phối bước | Worker + hàng đợi Postgres (`FOR UPDATE SKIP LOCKED`) | — | — |
+| Thông báo, trigger định kỳ | n8n self-host | — | — |
 
 **Không có GPL/AGPL nào trong đường sản xuất** — NMI là doanh nghiệp thương mại.
 
@@ -103,4 +114,21 @@ phạm vi quyền. Không có clearance thì không gọi được hàm. Xem `sr
 4. **Gate duyệt của người là bắt buộc** ở Giai đoạn 1.
 5. **Nguồn có watermark dán cứng: không publish lên TikTok.**
 
-Chi tiết và căn cứ: `docs/phuong-an-cuoi-cung.md` mục B, D.1, F2.
+6. **Xác minh chủ sở hữu trước khi tải** — duyệt *một* kênh không mở quyền cho *cả* nền tảng.
+   Khớp theo host chỉ cho ra ứng viên; `Source.assert_owns()` với id chủ kênh từ metadata mới
+   là xác minh.
+
+Năm quy tắc đầu được thi hành ở tầng domain, không phải bằng câu `if` ở tầng ngoài — xem
+`src/domain/sourcing/clearance.py`. Chi tiết và căn cứ: `docs/phuong-an-cuoi-cung.md` mục B, D.1, F2.
+
+## Test
+
+```
+make test        191 unit test, < 1s. Không DB, không GPU, không token
+make test-int     43 integration test. Postgres thật + ffmpeg/libass thật
+```
+
+Tầng domain thuần stdlib nên toàn bộ quy tắc license và gate duyệt test được trong vài chục
+milligiây. Test tích hợp phủ ba chỗ dễ sai im lặng: mapper DB (mất dữ liệu mà unit test không
+thấy), glyph tiếng Việt trong libass (render xong nhưng sai font), và form duyệt license (checkbox
+không tick phải nghĩa là *không* cấp quyền).

@@ -32,6 +32,8 @@ from src.interfaces.api.schemas import (
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
+STATUS_QUERY = Query(default=ApprovalStatus.PENDING)
+
 Uow = Annotated[SqlUnitOfWork, Depends(get_uow)]
 Clock = Annotated[SystemClock, Depends(get_clock)]
 
@@ -105,7 +107,7 @@ def reject(source_id: int, body: RejectIn, uow: Uow, clock: Clock) -> SourceOut:
 @router.get("", response_model=list[SourceOut])
 def list_sources(
     uow: Uow,
-    status: ApprovalStatus = Query(default=ApprovalStatus.PENDING),
+    status: ApprovalStatus = STATUS_QUERY,
     limit: int = Query(default=100, le=500),
 ) -> list[SourceOut]:
     with uow:

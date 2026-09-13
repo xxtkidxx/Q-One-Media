@@ -149,7 +149,7 @@ class YouTubePublisher:
             if status_code in (403, 429, 500, 503):
                 raise PublishFailed(f"YouTube {status_code}: {exc}") from exc
             raise PublishRejected(f"YouTube {status_code}: {exc}") from exc
-        except Exception as exc:  # noqa: BLE001 — mạng đứt giữa upload
+        except Exception as exc:
             raise PublishFailed(f"upload thất bại: {type(exc).__name__}: {exc}") from exc
 
         video_id = str(response.get("id") or "")

@@ -19,7 +19,11 @@ from src.domain.production.entities import Item
 from src.domain.production.value_objects import ItemStage
 from src.domain.publishing import policy
 from src.domain.publishing.entities import Publication
-from src.domain.publishing.value_objects import PublishPlatform, PublishStatus, VideoMetadata
+from src.domain.publishing.value_objects import (
+    PublishPlatform,
+    PublishStatus,
+    VideoMetadata,
+)
 
 
 class PublishDisabled(DomainError):
@@ -109,7 +113,7 @@ def publish_item(
                     metadata=metadata.with_attribution(clearance.attribution_text),
                     clearance=clearance,
                 )
-            except Exception as exc:  # noqa: BLE001 — lỗi adapter nền tảng rất đa dạng
+            except Exception as exc:
                 # Bắt rộng ở đúng một chỗ này là có chủ ý: SDK ba nền tảng ném
                 # ba họ exception khác nhau, và một nền tảng lỗi không được làm
                 # đổ các nền tảng còn lại. Lỗi được ghi nguyên văn, không nuốt.

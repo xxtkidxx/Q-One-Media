@@ -58,13 +58,13 @@ def declare(uow, url=YT_CHANNEL, platform=Platform.YOUTUBE, kind=SourceKind.CHAN
 
 def approve(uow, clock, source_id, *, full=True, **overrides):
     rights = (
-        dict(
-            may_translate=True,
-            may_modify_audio=True,
-            may_subtitle=True,
-            may_republish=True,
-            may_commercial_use=True,
-        )
+        {
+            "may_translate": True,
+            "may_modify_audio": True,
+            "may_subtitle": True,
+            "may_republish": True,
+            "may_commercial_use": True,
+        }
         if full
         else {}
     )

@@ -29,7 +29,7 @@ def readyz(uow: Uow, config: Config, response: Response) -> dict[str, Any]:
     try:
         with uow:
             db_ok = ping(uow.session)
-    except Exception as exc:  # noqa: BLE001 — driver DB ném nhiều họ exception
+    except Exception as exc:
         response.status_code = 503
         return {"status": "degraded", "database": f"{type(exc).__name__}: {exc}"}
 

@@ -42,12 +42,12 @@ from src.application.use_cases.review_item import (
     reject_item,
     send_back_for_rewrite,
 )
-from src.application.use_cases.write_script import load_transcript
 from src.application.use_cases.submit_url import (
     ItemAlreadyExists,
     SourceNotDeclared,
     submit_url,
 )
+from src.application.use_cases.write_script import load_transcript
 from src.domain.errors import DomainError
 from src.domain.production.value_objects import ItemStage
 from src.domain.sourcing.value_objects import (
@@ -270,7 +270,7 @@ def transcript_queue(request: Request, uow: Uow, config: Config):
             source = uow.sources.get(item.source_id)
             try:
                 text, _ = load_transcript(config.media_root, item.id or 0)
-            except Exception:  # noqa: BLE001 — thiếu file là trạng thái hợp lệ để hiện
+            except Exception:
                 text = ""
             rows.append(
                 {

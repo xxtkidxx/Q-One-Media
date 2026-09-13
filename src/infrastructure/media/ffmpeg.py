@@ -72,6 +72,7 @@ def run(args: list[str], *, capture_stderr: bool = True) -> str:
     proc = subprocess.run(
         cmd,
         capture_output=capture_stderr,
+        check=False,  # tự kiểm returncode để phân loại lỗi
         text=True,
         encoding="utf-8",
         errors="replace",
@@ -107,7 +108,9 @@ def probe(path: Path) -> MediaInfo:
         "-show_streams",
         str(path),
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.run(
+        cmd, capture_output=True, check=False, text=True, encoding="utf-8", errors="replace"
+    )
     if proc.returncode != 0:
         raise FfmpegFailed(cmd, proc.stderr or "")
     data = json.loads(proc.stdout)
@@ -210,10 +213,11 @@ def _ass_filter(ass_file: Path, fonts_dir: Path | None) -> str:
     return vf
 
 
-# libass ghi dòng này ở mức info mỗi khi nó chọn font:
-#   fontselect: (Be Vietnam Pro, 700, 0) -> /path/BeVietnamPro-Bold.ttf, 0, BeVietnamPro-Bold
+# libass ghi dòng này ở mức info mỗi khi nó chọn font. Dạng thật:
+#   fontselect: (Be Vietnam Pro, 700, 0) -> /p/BeVietnamPro-Bold.ttf, 0, BeVietnamPro-Bold
 _FONTSELECT_RE = re.compile(
-    r"fontselect:\s*\((?P<want>[^,]+),\s*\d+,\s*\d+\)\s*->\s*(?P<path>[^,]+),\s*\d+,\s*(?P<got>.+?)\s*$"
+    r"fontselect:\s*\((?P<want>[^,]+),\s*\d+,\s*\d+\)"
+    r"\s*->\s*(?P<path>[^,]+),\s*\d+,\s*(?P<got>.+?)\s*$"
 )
 
 
@@ -335,7 +339,7 @@ def _ass_timestamp(seconds: float) -> str:
     """ASS dùng centisecond và giờ một chữ số: H:MM:SS.cc"""
     if seconds < 0:
         seconds = 0.0
-    cs = int(round(seconds * 100))
+    cs = round(seconds * 100)
     h, cs = divmod(cs, 360000)
     m, cs = divmod(cs, 6000)
     s, cs = divmod(cs, 100)

@@ -14,7 +14,11 @@ from src.domain.production.repository import ItemRepository
 from src.domain.publishing.repository import PublicationRepository
 from src.domain.publishing.value_objects import PublishPlatform, VideoMetadata
 from src.domain.scheduling.repository import JobRepository
-from src.domain.sourcing.clearance import DownloadClearance, DubbingClearance, PublishClearance
+from src.domain.sourcing.clearance import (
+    DownloadClearance,
+    DubbingClearance,
+    PublishClearance,
+)
 from src.domain.sourcing.repository import SourceRepository
 
 

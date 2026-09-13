@@ -12,7 +12,12 @@ from pydantic import BaseModel, Field
 
 from src.domain.production.entities import Item
 from src.domain.sourcing.entities import Source
-from src.domain.sourcing.value_objects import ContentType, LicenseType, Platform, SourceKind
+from src.domain.sourcing.value_objects import (
+    ContentType,
+    LicenseType,
+    Platform,
+    SourceKind,
+)
 
 
 class DeclareSourceIn(BaseModel):
@@ -44,7 +49,8 @@ class ApproveSourceIn(BaseModel):
     attribution_text: str | None = None
     may_translate: bool = False
     may_modify_audio: bool = Field(
-        default=False, description="Bắt buộc TRUE để lồng tiếng. Quyền dùng lại không suy ra quyền này"
+        default=False,
+        description="Bắt buộc TRUE để lồng tiếng. Quyền dùng lại không suy ra quyền này",
     )
     may_subtitle: bool = False
     may_republish: bool = False

@@ -1,0 +1,53 @@
+# Ruff — lint + format. Chạy: make lint
+
+line-length = 100
+target-version = "py311"
+extend-exclude = ["vendor", "alembic/versions"]
+
+[lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # isort
+    "UP",          # pyupgrade
+    "B",           # bugbear
+    "C4",          # comprehensions
+    "DTZ",         # datetime phải có timezone
+    "PL",          # pylint
+    "RUF",
+    "SIM",
+    "TID",
+]
+ignore = [
+    # Dương tính giả trên bind mount Windows: mọi file đều mang bit executable,
+    # nên ruff đòi shebang cho cả module thư viện.
+    "EXE002",
+    # Bắt Exception rộng có chú thích lý do ở từng chỗ (SDK nền tảng, torch,
+    # yt_dlp đều ném nhiều họ exception khác nhau).
+    "BLE001",
+    "PLR0912", "PLR0913", "PLR0915", "PLR0917",  # số nhánh/tham số: use case có nhiều port là bình thường
+    "PLR2004",  # số "magic" trong test là dữ liệu, không phải hằng số cần đặt tên
+    # Import trong hàm là CÓ CHỦ Ý ở các adapter: whisperx/demucs/voxcpm/yt_dlp/
+    # google-api chỉ có trong image worker. Import ở đầu module thì image api
+    # không khởi động được, và test không chạy được ngoài container.
+    "PLC0415",
+    # Toàn bộ tài liệu trong repo viết bằng tiếng Việt, dùng dấu – và “ ” thật.
+    # Ba rule này báo mọi ký tự đó là "nhập nhằng".
+    "RUF001", "RUF002", "RUF003",
+    # Cache model ở biến module-level là cố ý: nạp VoxCPM2 mất hàng chục giây và
+    # chiếm vài GB VRAM, nên chỉ nạp một lần cho cả vòng đời tiến trình.
+    "PLW0603",
+]
+
+[lint.per-file-ignores]
+# Hai dòng `Format:` và `Style:` của file ASS BẮT BUỘC nằm trên một dòng theo
+# đặc tả SubStation Alpha — xuống dòng là file phụ đề hỏng. Không phải code dài.
+"src/infrastructure/media/ffmpeg.py" = ["E501"]
+# Value object bất biến dùng giá trị mặc định gọi hàm là an toàn (frozen dataclass).
+"src/domain/**" = ["B008", "RUF009"]
+# Test dùng datetime cố định và assert nhiều — không cần siết như code sản xuất.
+"tests/**" = ["DTZ001", "SLF001", "B008", "RUF009"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

@@ -29,7 +29,6 @@ from src.application.use_cases.download_item import download_item
 from src.application.use_cases.synthesize_voice import synthesize_voice
 from src.application.use_cases.write_script import (
     load_glossary,
-    load_transcript,
     pick_segment,
     save_transcript,
     transcript_dir,

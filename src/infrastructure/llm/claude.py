@@ -164,7 +164,7 @@ class _ClaudeBase:
                 tools=[tool],
                 tool_choice={"type": "tool", "name": tool["name"]},
             )
-        except Exception as exc:  # noqa: BLE001 — SDK ném nhiều họ exception
+        except Exception as exc:
             name = type(exc).__name__
             # Rate limit và overload thì xếp lại; còn lại là lỗi của ta.
             if any(k in name for k in ("RateLimit", "Overloaded", "APIConnection", "Timeout")):

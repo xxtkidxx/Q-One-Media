@@ -46,12 +46,12 @@ EVIDENCE = LicenseEvidence(
 
 
 def make_source(**kw) -> Source:
-    defaults = dict(
-        platform=Platform.YOUTUBE,
-        kind=SourceKind.CHANNEL,
-        url=SourceUrl("https://www.youtube.com/@VendorAutomation"),
-        id=1,
-    )
+    defaults = {
+        "platform": Platform.YOUTUBE,
+        "kind": SourceKind.CHANNEL,
+        "url": SourceUrl("https://www.youtube.com/@VendorAutomation"),
+        "id": 1,
+    }
     return Source(**{**defaults, **kw})
 
 
@@ -105,7 +105,7 @@ def test_co_quyen_dung_lai_nhung_khong_co_quyen_sua_audio_thi_khong_long_tieng()
 def test_thieu_bat_ky_quyen_nao_trong_ba_quyen_long_tieng_deu_bi_tu_choi(thieu):
     scope = LicenseScope(
         **{
-            **{k: True for k in ("may_translate", "may_modify_audio", "may_subtitle")},
+            **dict.fromkeys(("may_translate", "may_modify_audio", "may_subtitle"), True),
             thieu: False,
         }
     )

@@ -17,7 +17,12 @@ import pytest
 from src.domain.errors import InvalidTransition
 from src.domain.production.value_objects import ItemStage
 from src.domain.scheduling.entities import Job, JobTask
-from src.interfaces.worker.handlers import HANDLERS, NEXT_TASK, REQUIRED_STAGE, enqueue_next
+from src.interfaces.worker.handlers import (
+    HANDLERS,
+    NEXT_TASK,
+    REQUIRED_STAGE,
+    enqueue_next,
+)
 from tests.fakes import FakeUnitOfWork
 from tests.unit.test_item_lifecycle import item_at_review
 
@@ -121,7 +126,6 @@ def test_render_phai_di_qua_mixed_truoc_khi_rendered():
     """
     from src.domain.production.value_objects import MediaAsset
 
-    item, _ = item_at_review()
     # Dựng lại một item đang ở aligned
     item2, _ = item_at_review()
     item2.stage = ItemStage.ALIGNED

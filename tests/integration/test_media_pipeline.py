@@ -107,7 +107,7 @@ def test_rut_audio_mono_16k(landscape_video, tmp_path):
     probe = subprocess.run(
         ["ffprobe", "-v", "error", "-select_streams", "a:0",
          "-show_entries", "stream=sample_rate,channels", "-of", "csv=p=0", str(out)],
-        capture_output=True, text=True,
+        capture_output=True, check=False, text=True,
     )
     assert probe.stdout.strip().startswith("16000,1")
 
@@ -209,7 +209,10 @@ def test_render_toan_chuoi_ra_video_doc_co_phu_de(landscape_video, tmp_path):
             source_video=landscape_video,
             voice_audio=voice,
             background_audio=bg,
-            subtitle_cues=[(0.0, 2.0, "Cpk thấp vì máy trôi."), (2.0, 3.8, "Không phải vì dung sai.")],
+            subtitle_cues=[
+                (0.0, 2.0, "Cpk thấp vì máy trôi."),
+                (2.0, 3.8, "Không phải vì dung sai."),
+            ],
             start_sec=1.0,
             end_sec=5.0,
             work_dir=tmp_path / "work",

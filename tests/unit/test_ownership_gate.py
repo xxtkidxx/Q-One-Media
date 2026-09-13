@@ -13,7 +13,10 @@ from pathlib import Path
 import pytest
 
 from src.application.use_cases.download_item import download_item
-from src.application.use_cases.manage_sources import DeclareSourceCommand, declare_source
+from src.application.use_cases.manage_sources import (
+    DeclareSourceCommand,
+    declare_source,
+)
 from src.application.use_cases.submit_url import submit_url
 from src.domain.errors import OwnershipMismatch
 from src.domain.production.value_objects import ItemStage
@@ -42,7 +45,7 @@ class StubProbe:
         self.calls.append(url)
         if self.owner is None:
             return {}
-        return {k: self.owner for k in self.keys}
+        return dict.fromkeys(self.keys, self.owner)
 
 
 @pytest.fixture

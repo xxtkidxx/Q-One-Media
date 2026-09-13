@@ -98,7 +98,7 @@ def separate(audio: Path, work_dir: Path) -> Stems:
         # máy, tiếng bíp, tiếng môi trường — thứ cần giữ.
         background = sum(t for name, t in by_name.items() if name != "vocals")
         save_audio(background.cpu(), str(background_path), **kwargs)
-    except Exception as exc:  # noqa: BLE001 — torch/demucs ném nhiều họ exception
+    except Exception as exc:
         raise SeparationFailed(f"Demucs thất bại: {type(exc).__name__}: {exc}") from exc
     finally:
         # Nhả VRAM ngay: worker còn phải nạp WhisperX và VoxCPM2 sau đó, và ba

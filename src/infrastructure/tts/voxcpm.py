@@ -48,7 +48,7 @@ def _load_model(model_dir: Path | None) -> Any:
     log.info("voxcpm.load.start", model_dir=str(model_dir) if model_dir else "default")
     try:
         _model = VoxCPM.from_pretrained(str(model_dir)) if model_dir else VoxCPM.from_pretrained()
-    except Exception as exc:  # noqa: BLE001 — lỗi nạp model rất đa dạng
+    except Exception as exc:
         raise ModelUnavailable(f"nạp VoxCPM2 thất bại: {type(exc).__name__}: {exc}") from exc
     log.info("voxcpm.load.done")
     return _model
@@ -140,7 +140,7 @@ class VoxCpmSynthesizer:
                 # thường là dấu hiệu video máy làm (F2.3). Kịch bản dài quá thì
                 # viết ngắn lại, việc đó do use case quyết định.
             )
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise TtsFailed(f"VoxCPM2 sinh giọng thất bại: {type(exc).__name__}: {exc}") from exc
 
         _write_wav(wav, dest, sample_rate=getattr(model, "sample_rate", 16000))
@@ -158,7 +158,7 @@ def _write_wav(samples: Any, dest: Path, *, sample_rate: int) -> None:
         flat = [float(x) for x in samples]
 
     pcm = array.array(
-        "h", (max(-32768, min(32767, int(round(x * 32767)))) for x in flat)
+        "h", (max(-32768, min(32767, round(x * 32767))) for x in flat)
     )
     with wave.open(str(dest), "wb") as w:
         w.setnchannels(1)

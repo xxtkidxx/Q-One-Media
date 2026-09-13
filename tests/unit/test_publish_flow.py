@@ -23,7 +23,11 @@ from src.domain.production.value_objects import (
     MediaAsset,
     Segment,
 )
-from src.domain.publishing.value_objects import PublishPlatform, PublishStatus, VideoMetadata
+from src.domain.publishing.value_objects import (
+    PublishPlatform,
+    PublishStatus,
+    VideoMetadata,
+)
 from src.domain.sourcing.entities import Source
 from src.domain.sourcing.value_objects import (
     Language,
@@ -241,7 +245,7 @@ def test_loi_nen_tang_duoc_ghi_nguyen_van_khong_nuot(uow, clock):
     run(uow, clock, item.id, {PublishPlatform.FACEBOOK: fb})
 
     pub = uow.publications.get_for(item.id, PublishPlatform.FACEBOOK)
-    assert "RuntimeError: 429 rate limit" == pub.error
+    assert pub.error == "RuntimeError: 429 rate limit"
 
 
 # ---------------- Không đăng hai lần ----------------

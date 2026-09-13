@@ -107,7 +107,7 @@ def run_once(uow: SqlUnitOfWork, settings: Settings, *, worker_id: str) -> bool:
             uow.commit()
         log.info("worker.job.redirected", job_id=job.id, reason=str(exc))
         return True
-    except Exception as exc:  # noqa: BLE001 — handler nào cũng có thể ném gì đó
+    except Exception as exc:
         # Phân loại theo thuộc tính ``retryable`` mà chính lớp lỗi khai. Lỗi
         # license và lỗi input không retry; lỗi mạng và rate limit thì có.
         retryable = bool(getattr(exc, "retryable", False))
@@ -169,7 +169,7 @@ def main() -> None:
     while not _shutdown:
         try:
             did_work = run_once(uow, settings, worker_id=worker_id)
-        except Exception as exc:  # noqa: BLE001 — vòng lặp không chết vì một lỗi DB
+        except Exception as exc:
             log.error("worker.loop.error", error=str(exc), kind=type(exc).__name__)
             time.sleep(IDLE_SLEEP_SEC)
             continue

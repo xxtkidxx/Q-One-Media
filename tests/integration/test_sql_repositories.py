@@ -138,7 +138,9 @@ def test_enum_luu_gia_tri_chu_khong_luu_ten_thanh_vien(uow):
         sid = saved.id
     with uow:
         raw = uow.session.execute(
-            __import__("sqlalchemy").text("SELECT kind::text, platform::text FROM sources WHERE id=:i"),
+            __import__("sqlalchemy").text(
+                "SELECT kind::text, platform::text FROM sources WHERE id=:i"
+            ),
             {"i": sid},
         ).one()
     assert raw == ("creator-page", "douyin")
@@ -208,7 +210,9 @@ def test_item_giu_nguyen_segment_duong_dan_va_ty_le(uow):
         item.mark_transcribed()
         item.send_transcript_to_review()
         item.pick_segment(Segment(120.5, 180.25, rationale="có số liệu Cpk"))
-        item.attach_script(script_vi="Kịch bản có dấu: ậ ả ằ ộ ự", clearance=src.clear_for_dubbing(NOW))
+        item.attach_script(
+            script_vi="Kịch bản có dấu: ậ ả ằ ộ ự", clearance=src.clear_for_dubbing(NOW)
+        )
         uow.items.update(item)
         uow.commit()
         iid = item.id
@@ -251,7 +255,9 @@ def test_count_by_stage(uow):
                     clearance=src.clear_for_download(NOW),
                 )
             )
-        uow.items.add(Item.blocked(url=SourceUrl("https://vimeo.com/x"), source_id=src.id, reason="r"))
+        uow.items.add(
+            Item.blocked(url=SourceUrl("https://vimeo.com/x"), source_id=src.id, reason="r")
+        )
         uow.commit()
 
     with uow:

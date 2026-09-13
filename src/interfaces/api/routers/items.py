@@ -23,7 +23,6 @@ from src.application.use_cases.submit_url import (
 from src.domain.production.value_objects import ItemStage
 from src.infrastructure.clock import SystemClock
 from src.infrastructure.db.uow import SqlUnitOfWork
-from src.shared.config import Settings
 from src.interfaces.api.deps import get_clock, get_config, get_uow
 from src.interfaces.api.schemas import (
     ItemOut,
@@ -33,8 +32,13 @@ from src.interfaces.api.schemas import (
     SubmitUrlIn,
     SubmitUrlOut,
 )
+from src.shared.config import Settings
 
 router = APIRouter(prefix="/items", tags=["items"])
+
+# Hằng số module-level: gọi Query() trong default của hàm tạo một đối tượng
+# dùng chung mọi request, và ruff cảnh báo đúng về mẫu đó.
+STAGE_QUERY = Query(default=ItemStage.INBOX)
 
 Uow = Annotated[SqlUnitOfWork, Depends(get_uow)]
 Clock = Annotated[SystemClock, Depends(get_clock)]
@@ -66,7 +70,7 @@ def submit(body: SubmitUrlIn, uow: Uow, clock: Clock) -> SubmitUrlOut:
 @router.get("", response_model=list[ItemOut])
 def list_items(
     uow: Uow,
-    stage: ItemStage = Query(default=ItemStage.INBOX),
+    stage: ItemStage = STAGE_QUERY,
     limit: int = Query(default=50, le=200),
 ) -> list[ItemOut]:
     with uow:

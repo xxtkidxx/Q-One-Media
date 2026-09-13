@@ -12,7 +12,12 @@ mà không có evidence) sẽ nổ ngay lúc đọc, chứ không lẳng lặng 
 from __future__ import annotations
 
 from src.domain.production.entities import Item
-from src.domain.production.value_objects import AspectRatio, ItemStage, MediaAsset, Segment
+from src.domain.production.value_objects import (
+    AspectRatio,
+    ItemStage,
+    MediaAsset,
+    Segment,
+)
 from src.domain.publishing.entities import Publication
 from src.domain.scheduling.entities import Job, JobTask
 from src.domain.sourcing.entities import Source

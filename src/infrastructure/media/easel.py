@@ -56,7 +56,9 @@ def _run(script: str, subcommand: str, args: list[str]) -> None:
         raise EaselFailed(script, f"chưa vendor {path} — xem vendor/easel/ORIGIN.md")
     cmd = [sys.executable, str(path), subcommand, *args]
     log.info("easel.run", script=script, subcommand=subcommand, args=args)
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    proc = subprocess.run(
+        cmd, capture_output=True, check=False, text=True, encoding="utf-8", errors="replace"
+    )
     if proc.returncode != 0:
         raise EaselFailed(script, (proc.stderr or "") + (proc.stdout or ""))
 
