@@ -23,7 +23,7 @@ services:
     environment:
       LOG_LEVEL: INFO
       RELOAD: "false"
-    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --workers 2
+    command: uvicorn src.interfaces.api.main:app --host 0.0.0.0 --port 8000 --workers 2
     ports:
       - "127.0.0.1:${API_PORT:-8001}:8000"
     logging: *logging

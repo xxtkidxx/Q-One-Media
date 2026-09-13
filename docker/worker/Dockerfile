@@ -44,7 +44,7 @@ ENV HF_HOME=/models/huggingface \
 FROM base AS dev
 RUN pip install pytest pytest-asyncio ruff
 # Code mount từ host qua compose.dev — không COPY ở đây.
-CMD ["python", "-m", "src.worker.main"]
+CMD ["python", "-m", "src.interfaces.worker.main"]
 
 # ---------- prod ----------
 FROM base AS prod
@@ -52,4 +52,4 @@ COPY src/ /app/src/
 COPY vendor/ /app/vendor/
 RUN useradd -m -u 10001 qone && chown -R qone:qone /app
 USER qone
-CMD ["python", "-m", "src.worker.main"]
+CMD ["python", "-m", "src.interfaces.worker.main"]

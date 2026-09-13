@@ -8,12 +8,12 @@ PROD    := $(BASE) -f docker/docker-compose.prod.yml --env-file .env.prod
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-up dev-down dev-logs dev-build prod-up prod-down prod-logs prod-build \
-        test test-all lint shell psql models status clean-work
+        test test-int test-all lint shell psql models status clean-work
 
 help:
 	@echo "DEV : dev-up dev-down dev-logs dev-build"
 	@echo "PROD: prod-up prod-down prod-logs prod-build"
-	@echo "KHAC: test test-all lint shell psql models status clean-work"
+	@echo "KHAC: test test-int test-all lint shell psql models status clean-work"
 
 # ---------------- DEV ----------------
 dev-up:
@@ -49,9 +49,13 @@ prod-logs:
 test:
 	$(DC) $(DEV) run --rm --no-deps api pytest tests/unit -x -q -m "not gpu and not external"
 
+# Test tích hợp: cần postgres chạy. Mapper là chỗ duy nhất mất dữ liệu im lặng được.
+test-int:
+	$(DC) $(DEV) run --rm api pytest tests/integration -q -m integration
+
 # Chỉ chạy khi chuẩn bị merge hoặc được yêu cầu
 test-all:
-	$(DC) $(DEV) run --rm api pytest -q -m "not external"
+	$(DC) $(DEV) run --rm api pytest -q -m "not gpu and not external"
 
 lint:
 	$(DC) $(DEV) run --rm --no-deps api ruff check src tests

@@ -23,7 +23,7 @@ ENV MEDIA_ROOT=/data/media
 FROM base AS dev
 RUN pip install pytest pytest-asyncio httpx ruff
 EXPOSE 8000
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+CMD ["uvicorn", "src.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
 
 # ---------- prod ----------
 FROM base AS prod
@@ -31,4 +31,4 @@ COPY src/ /app/src/
 RUN useradd -m -u 10001 qone && chown -R qone:qone /app
 USER qone
 EXPOSE 8000
-CMD ["uvicorn", "src.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "src.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
