@@ -33,6 +33,16 @@ def _env_int(name: str, default: int) -> int:
         raise ConfigError(f"{name} phải là số nguyên, nhận {raw!r}") from exc
 
 
+def _env_float(name: str) -> float | None:
+    raw = os.environ.get(name)
+    if raw is None or raw.strip() == "":
+        return None
+    try:
+        return float(raw)
+    except ValueError as exc:
+        raise ConfigError(f"{name} phải là số thực, nhận {raw!r}") from exc
+
+
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None or raw == "":
@@ -56,6 +66,10 @@ class TTSSettings:
     engine: str = "voxcpm"
     voice_ref: str | None = None
     fptai_api_key: str | None = None
+    # Tốc độ đọc ĐO ĐƯỢC của giọng đang dùng, âm tiết/giây (G0.7).
+    # None là mặc định có chủ ý: chưa đo thì không lập ngân sách âm tiết được, và
+    # use case phải từ chối rõ ràng chứ không lấy một con số trên mạng ra dùng.
+    measured_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -111,6 +125,7 @@ def load_settings() -> Settings:
             engine=_env("TTS_ENGINE", "voxcpm"),
             voice_ref=os.environ.get("VOXCPM_VOICE_REF") or None,
             fptai_api_key=os.environ.get("FPTAI_API_KEY") or None,
+            measured_rate=_env_float("TTS_SYLLABLES_PER_SEC"),
         ),
         publish=PublishSettings(
             enabled=_env_bool("PUBLISH_ENABLED", False),
