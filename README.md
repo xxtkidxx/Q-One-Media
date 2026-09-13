@@ -60,17 +60,27 @@ data/models/                cache model ~10 GB    ← dùng chung dev/prod (arti
 
 ## Bố cục
 
+Clean Architecture — mũi tên phụ thuộc luôn chỉ vào trong. Chi tiết và quy tắc: [AGENTS.md](AGENTS.md).
+
 ```
 AGENTS.md · CLAUDE.md     hướng dẫn agent (CLAUDE.md chỉ là con trỏ)
 PLAN.md                   kế hoạch + hiện trạng
 docs/                     đặc tả duy nhất
 docker/                   Dockerfile + compose (base/dev/prod) + schema SQL
-src/                      code của mình: api, ingest, tts, publish, db, shared
+src/domain/               nghiệp vụ thuần, chỉ stdlib — license gate sống ở đây
+src/application/          use case + port
+src/infrastructure/       adapter: Postgres, yt-dlp, (tts/publish/media: chưa có)
+src/interfaces/           FastAPI + worker
+src/shared/               config, paths, logging
 vendor/                   code bên thứ ba đã vendor, kèm ORIGIN.md
-tests/                    unit (không network/GPU) · integration
-research/nmi-scan/        corpus song ngữ nmi.vn → rút glossary thuật ngữ (đầu vào thật, không phải tài liệu)
+tests/unit/               không network/GPU/DB, chạy < 1s · tests/integration/ cần container
+research/nmi-scan/        corpus song ngữ nmi.vn → rút glossary thuật ngữ
 data/                     runtime, gitignored
 ```
+
+**License gate là kiểu dữ liệu, không phải câu `if`.** Hàm tải video bắt buộc nhận một
+`DownloadClearance`, và vật đó chỉ `Source` cấp được sau khi kiểm trạng thái, hạn license và
+phạm vi quyền. Không có clearance thì không gọi được hàm. Xem `src/domain/sourcing/clearance.py`.
 
 ## Stack
 

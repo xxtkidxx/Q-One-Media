@@ -62,6 +62,7 @@ Khi một test đỏ: đọc **thông báo lỗi thật**, sửa một nguyên n
 4. **Giữ nguyên watermark và credit gốc.** Không viết hàm xoá watermark.
 5. **Gate duyệt của người là bắt buộc** ở Giai đoạn 1. Không tự động publish bỏ qua bước duyệt.
 6. **Nguồn có watermark dán cứng: không publish lên TikTok.**
+7. **Xác minh chủ sở hữu trước khi tải.** Duyệt **một** kênh không mở quyền cho cả nền tảng. Khớp theo host chỉ cho ra ứng viên; phải gọi `Source.assert_owns()` với id chủ kênh lấy từ metadata. Nguồn dạng bao mà chưa khai `external_owner_id` thì từ chối — thiếu cách xác minh là lý do hợp lệ để dừng, không phải lý do để cho qua.
 
 ---
 
@@ -80,7 +81,8 @@ make prod-up
 make prod-logs
 make prod-down
 
-make test              # pytest trong container dev, bỏ qua gpu/external
+make test              # unit test trong container dev, bỏ qua gpu/external/integration
+make test-int          # test tích hợp trên Postgres thật (cần container chạy)
 make shell             # bash trong worker container
 ```
 
@@ -97,34 +99,82 @@ make shell             # bash trong worker container
 
 ---
 
-## Bố cục code
+## Bố cục code — Clean Architecture, bốn tầng
 
 ```
-src/api/        FastAPI: hộp thư URL, license gate, job queue, publish dispatch
-src/ingest/     yt-dlp wrapper, nhánh riêng cho Douyin (tải đồng bộ)
-src/tts/        Adapter VoxCPM2; fallback FPT.AI qua cùng interface
-src/publish/    YouTube Data API, Facebook Graph API — sau interface publish() duy nhất
-src/db/         Schema + migration (sources, items, jobs, licenses)
-src/shared/     Config, logging, path helper
-vendor/         Code bên thứ ba đã vendor — xem vendor/README.md
-tests/unit/     Không cần network, không cần GPU
-tests/integration/  Cần container chạy
-docker/         Dockerfile + compose
-scripts/        Script vận hành một lần (setup, fetch model, migrate)
+src/domain/          Thuần Python, CHỈ stdlib. Entity, value object, port (Protocol).
+  sourcing/            Source — kiểm soát pháp lý cốt lõi. clearance.py = license gate
+  production/          Item — máy trạng thái 17 bước của pipeline
+  publishing/          Publication + policy.py (quyết định CÓ đăng hay không)
+  scheduling/          Job — hàng đợi
+  errors.py            Lỗi có phân loại; nhóm LicenseViolation tách riêng
+src/application/     Use case điều phối domain qua port. Không biết framework.
+  ports.py             UnitOfWork, Clock, AuditLog, VideoDownloader, SpeechSynthesizer,
+                       VideoPublisher, SegmentAdvisor, ScriptWriter
+  use_cases/           manage_sources, submit_url, download_item, review_item, publish_item
+src/infrastructure/  Adapter. Biết SQLAlchemy, ffmpeg, HTTP, yt-dlp.
+  db/                  orm.py (dòng dữ liệu) · mappers.py · repositories.py · uow.py
+  ingest/              yt-dlp: YtDlpProbe (metadata) + YtDlpDownloader
+  tts/ publish/ media/ chưa hiện thực — xem PLAN.md G2.9, G3.3, G4.3
+src/interfaces/      Biên ngoài. Mỏng có chủ ý.
+  api/                 FastAPI: main, deps, schemas, routers/
+  worker/              Vòng lặp lấy việc từ hàng đợi
+src/shared/          Cross-cutting: config.py, paths.py, logging.py
+
+vendor/              Code bên thứ ba đã vendor — xem vendor/README.md
+tests/unit/          Không network, không GPU, không DB. Chạy < 1s
+tests/integration/   Cần container. Đánh dấu @pytest.mark.integration
+tests/fakes.py       Hiện thực in-memory của mọi port
+docker/              Dockerfile + compose + schema SQL
 ```
+
+### Quy tắc phụ thuộc — quan trọng nhất
+
+**Mũi tên chỉ vào trong.** `interfaces` → `application` → `domain`; `infrastructure` → `domain`.
+Ngược lại là sai:
+
+- `src/domain/` **không** import `sqlalchemy`, `fastapi`, `yt_dlp`, `httpx`, hay `src.shared.config`.
+  Nếu một file trong `domain/` cần import ngược ra ngoài thì thiết kế sai, không phải thiếu tiện ích.
+- `src/application/` chỉ import `domain` và port của chính nó. Không import `infrastructure`.
+- Quy tắc nghiệp vụ nằm ở `domain/`. Thấy một câu `if` về license trong router hay worker
+  thì đó là chỗ cần sửa.
+
+### Vì sao license gate là kiểu dữ liệu
+
+`domain/sourcing/clearance.py` định nghĩa `DownloadClearance` / `DubbingClearance` /
+`PublishClearance`. Chỉ `Source.clear_for_*()` cấp được, và hàm tải/lồng tiếng/đăng
+**bắt buộc nhận** một clearance. Vì vậy không tồn tại đường gọi nào đi vòng qua gate —
+trình kiểm tra kiểu báo lỗi ngay, không cần ai nhớ quy tắc.
+
+Hệ quả khi viết code mới: **đừng** thêm tham số `skip_license`, **đừng** đọc `sources.status`
+rồi tự quyết định ở tầng ngoài. Xin clearance, và để lỗi nổ ra nếu không được cấp.
+
+Riêng quyền sở hữu: `Source.claims()` chỉ lọc **ứng viên** (cùng host). Xác minh thật là
+`Source.assert_owns(id_chủ_kênh_từ_metadata)` — duyệt một kênh YouTube không mở quyền cho
+cả youtube.com.
 
 ### Quy ước
 
 - Python 3.11, `ruff` format + lint, type hint ở biên public.
-- Đường dẫn: **luôn** qua `src/shared/paths.py`, không hardcode `./data/...`.
+- Đường dẫn: **luôn** qua `src/shared/paths.py`. Đường dẫn lưu trong DB là **tương đối** so
+  với `MEDIA_ROOT` — để di chuyển cây `data/` sang máy khác không phải sửa DB.
 - Config qua biến môi trường, đọc một lần trong `src/shared/config.py`. Không `os.getenv` rải rác.
-- Không bắt `Exception` trần. Lỗi có phân loại: retry được (mạng, rate limit) vs không (license, input sai).
+  **Không thêm cờ cấu hình bật/tắt license gate hay gate duyệt** — đó là bất biến, không phải cấu hình.
+- Không bắt `Exception` trần. Lỗi phân loại bằng thuộc tính `retryable`: mạng/rate limit thì có,
+  license/input sai thì không. Worker đọc đúng thuộc tính đó để quyết định xếp lại hay bỏ.
+- Thời gian: luôn UTC có timezone, lấy qua port `Clock`. So sánh `expires_at` với `datetime`
+  naive sẽ nổ `TypeError` ngay trong license gate.
 - Log JSON ra stdout; Docker gom vào `data/{env}/logs/`.
-- **Không sửa file trong `vendor/`.** Cần đổi hành vi thì bọc thêm lớp adapter trong `src/`. Lý do: còn so được với upstream.
+- **Không sửa file trong `vendor/`.** Cần đổi hành vi thì bọc adapter trong `src/infrastructure/`.
 
 ### Về `vendor/`
 
-Code lấy từ VideoLingo (Apache-2.0) và Easel (Apache-2.0). Mỗi thư mục con phải có `ORIGIN.md` ghi: repo, commit SHA, ngày lấy, file nào, đã sửa gì. Đây vừa là nghĩa vụ license vừa để đối chiếu upstream về sau.
+Code lấy từ VideoLingo (Apache-2.0) và Easel (Apache-2.0). Mỗi thư mục con phải có `ORIGIN.md`
+ghi: repo, commit SHA, ngày lấy, file nào, đã sửa gì. Vừa là nghĩa vụ license vừa để đối chiếu
+upstream về sau.
+
+**Không vendor bước tải của VideoLingo** (`core/_1_ytdlp.py`) — đã có
+`src/infrastructure/ingest/ytdlp.py` thay thế, lý do ghi trong docstring file đó.
 
 ---
 

@@ -8,14 +8,15 @@
 
 ## 1. Hiện trạng — một dòng
 
-**Khung dự án đã dựng (Docker, schema DB, hướng dẫn agent). Chưa có code chạy được. Đang ở G0: chờ kiểm chứng khả thi và 5 quyết định của người dùng.**
+**Lõi đã chạy thật: license gate + hộp thư URL + hàng đợi việc, trên Postgres trong Docker. Các bước media (ASR, TTS, render, publish) chưa có. Vẫn chờ G0 kiểm chứng khả thi và 5 quyết định của người dùng.**
 
 | | |
 |---|---|
-| Mốc hiện tại | **G0 — Kiểm chứng khả thi** |
-| Tiến độ tổng | ~5% (khung + đặc tả xong, code chưa) |
+| Mốc hiện tại | **G2 đang làm** (G2.1–G2.5 xong) · G0 vẫn mở, không chặn code |
+| Tiến độ tổng | ~25% |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
-| Việc tiếp theo | Ba việc ở mục 4, làm song song được |
+| Đã kiểm chứng | 112 unit test + 12 integration test xanh; API `/readyz` 200; vòng đời license gate chạy đầu-cuối qua HTTP |
+| Việc tiếp theo | G2.6 (worker ASR + Demucs) — nhưng cần G1.1 vendor VideoLingo trước |
 
 ---
 
@@ -33,6 +34,13 @@
 - [x] Docker: base + dev + prod tách rõ, state bind mount vào `./data/`
 - [x] Schema DB: `sources`, `items`, `publications`, `jobs`, `glossary`, `audit_log`
 - [x] Makefile, `.gitignore`, `.env.*.example`
+- [x] **Tầng domain** (Clean Architecture + DDD): 4 bounded context, thuần stdlib
+- [x] **License gate là kiểu dữ liệu** — clearance chỉ `Source` cấp được, không đi vòng được
+- [x] **Bịt lỗ xác minh chủ sở hữu** — duyệt một kênh không mở quyền cho cả nền tảng
+- [x] **Tầng application**: use case khai báo/duyệt nguồn, hộp thư URL, tải, duyệt nội dung, publish
+- [x] **Tầng infrastructure**: ORM + mapper + repository + UoW trên Postgres; adapter yt-dlp
+- [x] **FastAPI** `/sources` `/items` `/healthz` `/readyz` + worker vòng lặp hàng đợi
+- [x] Kiểm chứng thật: API boot, `/readyz` 200, vòng đời license gate đầu-cuối qua HTTP, CHECK constraint chặn cả `UPDATE` tay
 
 ---
 
@@ -66,11 +74,11 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 
 ### G2 — Tự động hoá pipeline lõi (tuần 3–6)
 
-- [ ] **G2.1** `src/shared/` — config, paths, logging
-- [ ] **G2.2** `src/db/` — model SQLAlchemy + alembic từ schema đã có
-- [ ] **G2.3** `src/api/` — hộp thư URL, CRUD `sources`, **license gate**
-- [ ] **G2.4** `src/ingest/` — yt-dlp wrapper + **nhánh Douyin tải đồng bộ**
-- [ ] **G2.5** Job queue trên Postgres (`FOR UPDATE SKIP LOCKED`)
+- [x] **G2.1** `src/shared/` — config, paths, logging
+- [~] **G2.2** `src/infrastructure/db/` — ORM + mapper + repository + UoW xong. **Alembic chưa** (schema mới thêm `sources.external_owner_id`, DB đang tạo từ `01-schema.sql`)
+- [x] **G2.3** `src/interfaces/api/` — hộp thư URL, CRUD `sources`, **license gate** + xác minh chủ sở hữu
+- [~] **G2.4** `src/infrastructure/ingest/ytdlp.py` — wrapper + probe metadata xong; ưu tiên khẩn cho Douyin xong. **Chưa test trên URL Douyin thật** (G0.3)
+- [x] **G2.5** Job queue trên Postgres (`FOR UPDATE SKIP LOCKED`) + thu hồi việc của worker đã chết
 - [ ] **G2.6** Worker: ASR (WhisperX) + Demucs
 - [ ] **G2.7** Chọn đoạn bằng LLM (prompt tiêu chí kỹ thuật, không phải "điểm cười")
 - [ ] **G2.8** Viết kịch bản Việt + glossary + **ngân sách âm tiết theo cảnh**
@@ -163,6 +171,12 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D12 | Job queue trên **Postgres**, không thêm Redis | Ít thành phần hơn; `FOR UPDATE SKIP LOCKED` là đủ | 13/09 |
 | D13 | `data/models/` **dùng chung** dev/prod | Model là artifact bất biến, không phải state; ~10 GB | 13/09 |
 | D14 | TikTok ưu tiên thấp nhất | Khán giả là quản lý nhà máy (YouTube/Facebook); TikTok API khắt khe nhất | 13/09 |
+| D15 | **Clean Architecture + DDD**, `domain/` thuần stdlib | Quy tắc license test được trong < 1s, không DB/GPU/token; đổi hạ tầng không sửa nghiệp vụ | 13/09 |
+| D16 | **License gate là kiểu dữ liệu** (clearance), không phải câu `if` | Câu `if` bị quên hoặc bị đường code mới đi vòng; clearance thì trình kiểm tra kiểu bắt lỗi ngay | 13/09 |
+| D17 | **Bỏ `REQUIRE_LICENSE_APPROVAL` / `REQUIRE_HUMAN_REVIEW` khỏi env** | Một cờ có thể đặt `false` *chính là* đường tắt mà quy tắc nghiệp vụ cấm. Giữ `PUBLISH_ENABLED` vì nó chỉ chặn thêm | 13/09 |
+| D18 | Thêm `sources.external_owner_id`, bắt buộc với nguồn dạng bao | Khớp theo host nghĩa là duyệt một kênh YouTube mở cửa cho mọi URL youtube.com — lỗ thật, và nó đi qua im lặng | 13/09 |
+| D19 | **Không vendor `core/_1_ytdlp.py`** của VideoLingo, tự viết adapter | Upstream chạy `pip install --upgrade yt-dlp` mỗi lần tải, ghi vào `output/` toàn cục, và gắn cứng `config.yaml` | 13/09 |
+| D20 | Mapper viết tay, không để ORM map thẳng vào entity | Value object phải kiểm bất biến **cả khi** dữ liệu đến từ DB — một dòng hỏng nổ lúc đọc, không lẳng lặng qua gate | 13/09 |
 
 ---
 
@@ -184,3 +198,4 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | Ngày | Việc |
 |---|---|
 | 13/09/2026 | Khảo sát công nghệ, quét nmi.vn, đánh giá 20 dự án OSS, chốt stack, dựng khung Docker + schema + AGENTS.md, dọn 13 file `.whl` và 5 tài liệu trung gian |
+| 13/09/2026 | Code lõi: domain 4 bounded context → application use case → infrastructure Postgres → FastAPI + worker. 4 commit. Bịt lỗ xác minh chủ sở hữu trong license gate. 112 unit + 12 integration test xanh. Sửa 4 bug do test bắt được (xem nhật ký commit) |
