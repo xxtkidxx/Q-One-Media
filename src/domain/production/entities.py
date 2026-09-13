@@ -43,11 +43,15 @@ _ALLOWED: dict[ItemStage, frozenset[ItemStage]] = {
     ItemStage.SCRIPTED: frozenset(
         {ItemStage.VOICED, ItemStage.SEGMENT_PICKED, ItemStage.FAILED, ItemStage.REJECTED}
     ),
-    ItemStage.VOICED: frozenset({ItemStage.ALIGNED, ItemStage.SCRIPTED, ItemStage.FAILED}),
+    # voiced -> segment_picked: TTS render dài hơn khung quá 5% thì viết lại (F2.3)
+    ItemStage.VOICED: frozenset({ItemStage.ALIGNED, ItemStage.SEGMENT_PICKED, ItemStage.FAILED}),
     ItemStage.ALIGNED: frozenset({ItemStage.MIXED, ItemStage.FAILED}),
     ItemStage.MIXED: frozenset({ItemStage.RENDERED, ItemStage.FAILED}),
     ItemStage.RENDERED: frozenset({ItemStage.HUMAN_REVIEW, ItemStage.FAILED}),
-    ItemStage.HUMAN_REVIEW: frozenset({ItemStage.APPROVED, ItemStage.REJECTED, ItemStage.SCRIPTED}),
+    # human_review -> segment_picked: người duyệt trả về viết lại kịch bản
+    ItemStage.HUMAN_REVIEW: frozenset(
+        {ItemStage.APPROVED, ItemStage.REJECTED, ItemStage.SEGMENT_PICKED}
+    ),
     ItemStage.APPROVED: frozenset({ItemStage.PUBLISHED, ItemStage.FAILED, ItemStage.REJECTED}),
     ItemStage.PUBLISHED: frozenset(),
     ItemStage.FAILED: frozenset({ItemStage.INBOX, ItemStage.REJECTED}),  # cho phép chạy lại
