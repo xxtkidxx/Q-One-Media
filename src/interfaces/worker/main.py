@@ -1,7 +1,7 @@
 """Worker: lấy việc từ hàng đợi Postgres và chạy.
 
 Vòng lặp cố tình đơn giản — **một việc một lần, không thread pool**. Lý do: các
-bước nặng (WhisperX large-v3, Demucs, VoxCPM2) đều chiếm trọn GPU, nên chạy song
+bước nặng (Whisper large-v3, Demucs, VoxCPM2) đều chiếm trọn GPU, nên chạy song
 song trong cùng tiến trình chỉ làm tăng nguy cơ hết VRAM chứ không nhanh hơn.
 Muốn nhiều việc cùng lúc thì tăng số container worker, và ``FOR UPDATE SKIP
 LOCKED`` đã bảo đảm chúng không giành nhau.

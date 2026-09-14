@@ -5,9 +5,10 @@
 yt-dlp==2026.8.19
 
 # --- ASR + forced alignment ---
-# WhisperX: timestamp cấp từ ±50ms (vs ±500ms Whisper thuần).
-# Dùng cho 2 việc: transcript nguồn, và căn phụ đề Việt theo audio TTS.
-whisperx==3.3.1
+# KHONG dung whisperx. Ban 3.3.1 khoa ctranslate2<4.5 (link cuDNN 8) nen khong
+# chay duoc tren base image cuDNN 9; ban 3.8.6 doi torch~=2.8. Va phan gia tri nhat
+# cua no - forced alignment - da bi thay vi model tieng Viet duy nhat no tro toi la
+# cc-by-nc-4.0. Xem src/infrastructure/asr/whisper.py.
 faster-whisper==1.1.0
 # ctranslate2 >= 4.5 la BAT BUOC, khong phai chon ban moi cho vui.
 # Ban 4.4.0 link voi cuDNN 8, con base image CUDA 12.4 va torch 2.6 deu mang

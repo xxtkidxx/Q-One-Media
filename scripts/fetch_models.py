@@ -20,8 +20,7 @@ MODEL_CACHE = Path(os.environ.get("MODEL_CACHE", "/models"))
 
 # Kích thước xấp xỉ, để người chạy biết đang chờ bao nhiêu.
 PLAN = [
-    ("WhisperX large-v3 (nhận dạng lời nguồn)", "~3 GB"),
-    ("WhisperX align vi (forced alignment tiếng Việt)", "~1 GB"),
+    ("Whisper large-v3 (nhận dạng lời + mốc thời gian phụ đề)", "~3 GB"),
     ("Demucs htdemucs (tách giọng khỏi tiếng máy)", "~300 MB"),
     ("VoxCPM2 openbmb/VoxCPM2 (giọng tiếng Việt)", "~5 GB"),
 ]
@@ -32,18 +31,16 @@ def _say(msg: str) -> None:
 
 
 def fetch_whisper() -> None:
-    """Tải model ASR và model alignment tiếng Việt.
+    """Tải model Whisper. **Một** model cho cả hai việc.
 
-    Hai model khác nhau và **đều cần**: một để đọc lời nguồn (en/zh), một để gióng
-    kịch bản tiếng Việt với audio TTS. Thiếu model align thì bước phụ đề chết.
+    Trước đây cần thêm một model wav2vec2 để gióng phụ đề; model đó đã bị bỏ vì
+    license cc-by-nc-4.0 và vì thiếu CTC head. Giờ cả nhận dạng lời nguồn và lấy
+    mốc thời gian để gióng đều dùng chung ``large-v3``.
     """
-    import whisperx
+    from faster_whisper import WhisperModel
 
-    _say("→ WhisperX large-v3 …")
-    whisperx.load_model("large-v3", "cpu", compute_type="int8", language="en")
-
-    _say("→ WhisperX align model cho tiếng Việt …")
-    whisperx.load_align_model(language_code="vi", device="cpu")
+    _say("→ Whisper large-v3 (Systran/faster-whisper-large-v3) …")
+    WhisperModel("large-v3", device="cpu", compute_type="int8")
 
 
 def fetch_demucs() -> None:
@@ -84,7 +81,7 @@ def main() -> int:
 
     failed: list[str] = []
     for label, fn in (
-        ("WhisperX", fetch_whisper),
+        ("Whisper", fetch_whisper),
         ("Demucs", fetch_demucs),
         ("VoxCPM2", fetch_voxcpm),
     ):

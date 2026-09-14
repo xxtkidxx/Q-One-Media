@@ -101,7 +101,7 @@ def separate(audio: Path, work_dir: Path) -> Stems:
     except Exception as exc:
         raise SeparationFailed(f"Demucs thất bại: {type(exc).__name__}: {exc}") from exc
     finally:
-        # Nhả VRAM ngay: worker còn phải nạp WhisperX và VoxCPM2 sau đó, và ba
+        # Nhả VRAM ngay: worker còn phải nạp Whisper và VoxCPM2 sau đó, và ba
         # model cùng ở trên GPU là đường ngắn nhất tới CUDA out of memory.
         gc.collect()
         try:

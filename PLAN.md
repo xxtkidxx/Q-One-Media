@@ -224,6 +224,7 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D50 | Xoá hẳn `align_known_text` khỏi `whisperx.py` thay vì để lại | Để hai đường tồn tại là mời người khác gọi nhầm vào đường NonCommercial |
 | D51 | `del model` tường minh trước `_free_vram()` | Đo trên RTX 3070: khi large-v3 float16 chạy, VRAM rảnh về **0,00/8,0 GB**. CTranslate2 cấp bộ nhớ **ngoài** allocator của PyTorch nên `empty_cache()` một mình không nhả được gì. Trên card 8 GB, chạy tuần tự là **bắt buộc**, không phải thực hành tốt |
 | D52 | Pin **`ctranslate2==4.8.2`** (>= 4.5), không để faster-whisper tự chọn | Bản 4.4.0 link với **cuDNN 8**, còn base image CUDA 12.4 và torch 2.6 đều mang **cuDNN 9** — không có cuDNN 8 ở đâu. CTranslate2 không nạp được `libcudnn_ops_infer.so.8` và **ABORT cứng cả tiến trình** (`Fatal Python error: Aborted`), không ném exception nên không handler nào bắt được. Nghĩa là **đường ASR trên GPU chưa từng chạy được một lần** — chỉ lộ ra khi chạy test GPU thật |
+| D53 | **Bỏ WhisperX hoàn toàn**, dùng `faster-whisper` trực tiếp | `whisperx 3.3.1` khoá `ctranslate2<4.5` (cuDNN 8) nên không chạy được trên base cuDNN 9; `whisperx 3.8.6` cho phép ctranslate2 mới nhưng đòi `torch~=2.8`, tức một lần di trú nữa cho thứ **ta không còn cần**: phần giá trị nhất của nó là forced alignment, đã bị thay vì license (D49). Phần còn lại — gom batch và VAD — `faster-whisper` có sẵn. Kết quả: **một** đường ASR duy nhất cho cả nhận dạng lời nguồn và mốc thời gian phụ đề |
 
 ---
 

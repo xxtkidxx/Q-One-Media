@@ -12,12 +12,12 @@ Thật                  DB + máy trạng thái item · license gate · TTS ti�
                       (edge-tts) · cắt + reframe blur + trộn audio + burn phụ đề
                       ASS + loudnorm (ffmpeg và script Easel thật)
 Giả (cần GPU/LLM)     tải video (dùng video sinh bằng lavfi) · tách stem Demucs ·
-                      nhận dạng lời WhisperX · chọn đoạn và viết kịch bản bằng LLM ·
+                      nhận dạng lời Whisper · chọn đoạn và viết kịch bản bằng LLM ·
                       forced alignment (cues chia đều theo số ký tự)
 ===================== ============================================================
 
 Vì vậy **timing phụ đề trong video này không phải timing production**: production
-dùng forced alignment của WhisperX (F2.5). Ở đây chia đều chỉ để có gì mà burn.
+gióng bằng word timestamp của Whisper (F2.5). Ở đây chia đều chỉ để có gì mà burn.
 
 Nguồn dùng ``license_type='own'``: video do chính script sinh ra, không mượn
 thước phim của ai. License gate vì thế đi qua một cách hợp lệ, không phải bị bỏ qua.
@@ -44,7 +44,7 @@ def _say(msg: str = "") -> None:
 
 
 def _gpu_available() -> bool:
-    """Có torch + CUDA + whisperx + demucs hay không.
+    """Có torch + CUDA + faster-whisper + demucs hay không.
 
     Quyết định bước nào chạy thật: trong container **api** thì không có gì, trong
     container **worker** có đủ. Script tự phát hiện thay vì bắt người chạy truyền cờ,
@@ -57,7 +57,7 @@ def _gpu_available() -> bool:
         if not torch.cuda.is_available():
             return False
         import demucs  # noqa: F401
-        import whisperx  # noqa: F401
+        import faster_whisper  # noqa: F401
     except ImportError:
         return False
     return True
@@ -203,7 +203,7 @@ def main() -> int:
     save_transcript(
         settings.media_root,
         item_id,
-        text="[transcript giả — bước WhisperX cần image worker]",
+        text="[transcript giả — bước Whisper cần image worker]",
         segments=[],
     )
 
@@ -249,7 +249,7 @@ def main() -> int:
     if has_gpu:
         _say("7/8  Gióng kịch bản đã biết với audio TTS bằng word timestamp của Whisper …")
         from src.infrastructure.asr.align import align_known_text
-        from src.infrastructure.asr.whisperx import group_words_into_cues
+        from src.infrastructure.asr.whisper import group_words_into_cues
 
         words = align_known_text(voice_path, SCRIPT_VI, language="vi")
         cues = group_words_into_cues(words)
@@ -313,7 +313,7 @@ def main() -> int:
          f"/web/review/{item_id}")
     _say()
     if has_gpu:
-        _say("Đã chạy THẬT: Demucs tách stem, WhisperX forced alignment, VoxCPM2/edge-tts,")
+        _say("Đã chạy THẬT: Demucs tách stem, gióng bằng Whisper, VoxCPM2/edge-tts,")
         _say("toàn bộ chuỗi ffmpeg. Còn giả: bước tải (dùng lavfi) và hai bước LLM")
         _say("(chọn đoạn, viết kịch bản) — hai bước đó cần ANTHROPIC_API_KEY.")
     else:

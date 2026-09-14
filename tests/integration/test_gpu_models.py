@@ -1,13 +1,13 @@
-"""Demucs, WhisperX và VoxCPM2 chạy với GPU và model thật.
+"""Demucs, Whisper và VoxCPM2 chạy với GPU và model thật.
 
 Đánh dấu ``gpu`` nên ``make test`` và ``make test-int`` đều bỏ qua. Chạy bằng:
 
     make test-gpu
 
 Nhóm test này tồn tại vì một ràng buộc cụ thể của máy đang dùng: **RTX 3070 có
-8 GB VRAM**, mà WhisperX large-v3 float16 (~4,7 GB) + Demucs (~2 GB) + VoxCPM2
+8 GB VRAM**, mà Whisper large-v3 float16 (~4,7 GB) + Demucs (~2 GB) + VoxCPM2
 (~5 GB) **không thể cùng ở trên card**. Thiết kế chạy tuần tự và gọi
-``_free_vram()`` sau mỗi model; nếu ai đó bỏ lệnh nhả VRAM đi thì test ở đây đỏ
+``free_vram()`` sau mỗi model; nếu ai đó bỏ lệnh nhả VRAM đi thì test ở đây đỏ
 bằng ``CUDA out of memory``, chứ không đỏ bằng một video xấu ba tuần sau.
 
 Mỗi test in VRAM đỉnh để so được giữa các lần chạy.
@@ -55,7 +55,7 @@ def clean_vram():
 def speech_audio(tmp_path_factory) -> Path:
     """Audio tiếng Việt thật để làm đầu vào — sinh bằng edge-tts.
 
-    Dùng giọng thật chứ không dùng sine wave: Demucs và WhisperX xử lý tiếng nói
+    Dùng giọng thật chứ không dùng sine wave: Demucs và Whisper xử lý tiếng nói
     khác hẳn xử lý âm thuần, nên test bằng sine chỉ chứng minh code chạy, không
     chứng minh nó làm đúng việc.
     """
@@ -126,12 +126,12 @@ def test_demucs_chay_lai_thi_dung_lai_ket_qua_cu(speech_audio, tmp_path):
     assert second.vocals.stat().st_mtime == mtime
 
 
-# ---------------- WhisperX: nhận dạng ----------------
+# ---------------- Whisper: nhận dạng ----------------
 
 
-def test_whisperx_nhan_dang_tieng_viet(speech_audio):
+def test_whisper_nhan_dang_tieng_viet(speech_audio):
     """Máy **đoán** chữ ở bước này, nên có tỷ lệ sai — vì thế GĐ1 bắt buộc có người soát."""
-    from src.infrastructure.asr.whisperx import transcribe
+    from src.infrastructure.asr.whisper import transcribe
 
     result = transcribe(speech_audio, language="vi")
     assert result.language == "vi"
@@ -142,10 +142,10 @@ def test_whisperx_nhan_dang_tieng_viet(speech_audio):
     assert any(c in result.text for c in "ăâđêôơưáàảãạ")
 
 
-def test_whisperx_truyen_language_tuong_minh(speech_audio):
+def test_whisper_truyen_language_tuong_minh(speech_audio):
     """Ép ngôn ngữ là có chủ ý: nội dung kỹ thuật đầy thuật ngữ Anh nên nhận tự
     động có thể ra sai ngôn ngữ, và khi đó transcript vô dụng mà không báo lỗi."""
-    from src.infrastructure.asr.whisperx import transcribe
+    from src.infrastructure.asr.whisper import transcribe
 
     assert transcribe(speech_audio, language="vi").language == "vi"
 
@@ -159,7 +159,7 @@ def test_forced_alignment_giu_nguyen_chu_da_biet(speech_audio):
     Chỉ timing mới cần đo. Đây là lý do không ASR lại audio TTS.
     """
     from src.infrastructure.asr.align import align_known_text
-    from src.infrastructure.asr.whisperx import group_words_into_cues
+    from src.infrastructure.asr.whisper import group_words_into_cues
 
     known = (
         "Biểu đồ kiểm soát cho thấy trung bình quá trình trôi dần theo ca. "
@@ -238,14 +238,14 @@ def test_voxcpm2_sinh_giong_tieng_viet(tmp_path):
 def test_ba_model_chay_tuan_tu_khong_het_vram(speech_audio, tmp_path):
     """Đây là test quan trọng nhất của file này.
 
-    Một job thật đi qua Demucs → WhisperX → VoxCPM2. Trên card 8 GB, ba model
+    Một job thật đi qua Demucs → Whisper → VoxCPM2. Trên card 8 GB, ba model
     cùng ở trên GPU là ``CUDA out of memory``. Test này chạy đúng chuỗi đó; nếu
     ai bỏ ``_free_vram()`` thì nó đỏ ở đây, không đỏ ba tuần sau bằng một job
     thất bại lúc 2 giờ sáng.
     """
     from src.infrastructure.asr.align import align_known_text
     from src.infrastructure.asr.demucs import separate
-    from src.infrastructure.asr.whisperx import transcribe
+    from src.infrastructure.asr.whisper import transcribe
     from src.infrastructure.tts.voxcpm import VoxCpmSynthesizer
 
     torch = _torch()

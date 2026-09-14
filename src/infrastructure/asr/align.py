@@ -1,7 +1,7 @@
 """Gióng **chữ đã biết** với audio TTS, bằng word timestamp của Whisper.
 
-Vì sao không dùng forced alignment của WhisperX — hai lý do độc lập, mỗi lý do
-đủ để loại:
+Vì sao không dùng forced alignment của WhisperX (và cuối cùng bỏ luôn WhisperX) —
+hai lý do độc lập, mỗi lý do đủ để loại:
 
 1. **License.** Model tiếng Việt duy nhất WhisperX trỏ tới là
    ``nguyenvulebinh/wav2vec2-base-vi``, license ``cc-by-nc-4.0`` —
@@ -40,7 +40,7 @@ from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from src.infrastructure.asr.whisperx import DEFAULT_MODEL, Word, _free_vram
+from src.infrastructure.asr.whisper import DEFAULT_MODEL, Word, free_vram, load_model
 from src.shared.logging import get_logger
 
 log = get_logger(__name__)
@@ -77,27 +77,14 @@ def _recognize_words(
 ) -> list[_Recognized]:
     """Lấy từ + mốc thời gian từ Whisper. Dùng faster-whisper trực tiếp.
 
-    Không qua ``whisperx.load_model``: pipeline của WhisperX gom theo batch và
-    không trả về word timestamp — mà word timestamp chính là thứ duy nhất ta cần ở
-    đây.
+    Dùng chung ``load_model`` với bước nhận dạng lời nguồn: cùng một model
+    ``large-v3``, chỉ khác là ở đây bật ``word_timestamps=True`` — mốc thời gian
+    chính là thứ duy nhất ta cần.
     """
-    try:
-        from faster_whisper import WhisperModel
-    except ImportError as exc:
-        raise AlignFailed("chưa cài faster-whisper — chỉ có trong image worker") from exc
-
-    try:
-        import torch
-
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    except ImportError:
-        device = "cpu"
-    compute_type = "float16" if device == "cuda" else "int8"
-
-    log.info("align.recognize.start", device=device, model=model_name)
+    log.info("align.recognize.start", model=model_name)
     model = None
     try:
-        model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        model = load_model(model_name)
         segments, _info = model.transcribe(
             str(audio), language=language, word_timestamps=True
         )
@@ -110,11 +97,10 @@ def _recognize_words(
     except Exception as exc:
         raise AlignFailed(f"Whisper không lấy được word timestamp: {exc}") from exc
     finally:
-        # Xoá model trước _free_vram(): CTranslate2 cấp VRAM ngoài allocator của
-        # PyTorch nên empty_cache() một mình không nhả được — xem chú thích trong
-        # whisperx.transcribe().
+        # Xoá model trước free_vram(): CTranslate2 cấp VRAM ngoài allocator của
+        # PyTorch nên empty_cache() một mình không nhả được — xem free_vram().
         del model
-        _free_vram()
+        free_vram()
 
     log.info("align.recognize.done", words=len(out))
     return out

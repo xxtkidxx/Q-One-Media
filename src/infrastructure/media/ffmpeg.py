@@ -133,7 +133,7 @@ def probe(path: Path) -> MediaInfo:
 
 
 def extract_audio(video: Path, dest: Path, *, sample_rate: int = 16000) -> Path:
-    """Rút audio mono 16 kHz — đúng thứ WhisperX và Demucs cần.
+    """Rút audio mono 16 kHz — đúng thứ Whisper và Demucs cần.
 
     16 kHz mono không phải để tiết kiệm chỗ: Whisper resample về đúng mức này ở
     bên trong, nên đưa sẵn thì bỏ được một lần chuyển đổi và kết quả giống nhau.

@@ -5,7 +5,7 @@ Không cần GPU: hàm này chỉ nhận danh sách từ kèm timestamp.
 
 from __future__ import annotations
 
-from src.infrastructure.asr.whisperx import Word, group_words_into_cues
+from src.infrastructure.asr.whisper import Word, group_words_into_cues
 
 
 def w(text: str, start: float, end: float) -> Word:

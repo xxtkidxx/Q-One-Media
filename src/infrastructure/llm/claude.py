@@ -264,7 +264,7 @@ class ClaudeScriptWriter(_ClaudeBase):
 
 
 def format_transcript_with_timestamps(segments: list[dict[str, Any]]) -> str:
-    """Đổi segment của WhisperX thành text có timestamp cho prompt.
+    """Đổi segment của Whisper thành text có timestamp cho prompt.
 
     Cần timestamp vì model phải trả về giây, và không có mốc thì nó chỉ đoán được.
     """

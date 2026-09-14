@@ -116,7 +116,7 @@ def handle_transcribe(job: Job, uow: UnitOfWork, settings: Settings) -> None:
     Chạy ASR trên stem giọng (đã bỏ nhạc/tiếng máy) nên transcript chính xác hơn
     hẳn so với chạy trên audio gốc.
     """
-    from src.infrastructure.asr.whisperx import transcribe
+    from src.infrastructure.asr.whisper import transcribe
 
     item_id = _need_item(job)
     with uow:
@@ -228,7 +228,7 @@ def handle_align(job: Job, uow: UnitOfWork, settings: Settings) -> None:
     import json
 
     from src.infrastructure.asr.align import align_known_text
-    from src.infrastructure.asr.whisperx import group_words_into_cues
+    from src.infrastructure.asr.whisper import group_words_into_cues
 
     item_id = _need_item(job)
     with uow:
