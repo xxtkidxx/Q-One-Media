@@ -23,11 +23,11 @@ người soát transcript.
 
 from __future__ import annotations
 
-import gc
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.shared.gpu import free_vram
 from src.shared.logging import get_logger
 
 log = get_logger(__name__)
@@ -74,8 +74,30 @@ def device_and_compute() -> tuple[str, str]:
     return "cpu", "int8"
 
 
+# ``free_vram`` được re-export có ý: ``align.py`` lấy nó cùng chỗ với ``load_model``,
+# vì hai thứ đó luôn đi thành cặp (nạp — xoá — nhả). Tách ra hai nguồn import là mời
+# người viết sau quên mất nửa sau.
+__all__ = [
+    "DEFAULT_MODEL",
+    "AsrFailed",
+    "Transcript",
+    "WhisperUnavailable",
+    "Word",
+    "device_and_compute",
+    "free_vram",
+    "group_words_into_cues",
+    "load_model",
+    "transcribe",
+]
+
+
 def load_model(model_name: str = DEFAULT_MODEL) -> Any:
-    """Nạp model Whisper. Người gọi **phải** ``del`` nó khi xong — xem ``free_vram``."""
+    """Nạp model Whisper. Người gọi **phải** ``del`` nó khi xong — xem ``free_vram``.
+
+    Đo bằng ``make measure-load``: chiếm ~3,5 GB VRAM ở float16, nạp lại mất 17,5 s.
+    Trên card 8 GB không giữ được nó qua ranh giới lời gọi, vì VoxCPM2 cần 5,12 GB —
+    xem ``src/shared/gpu.py``.
+    """
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
@@ -85,27 +107,6 @@ def load_model(model_name: str = DEFAULT_MODEL) -> Any:
     device, compute_type = device_and_compute()
     log.info("whisper.load", model=model_name, device=device, compute_type=compute_type)
     return WhisperModel(model_name, device=device, compute_type=compute_type)
-
-
-def free_vram() -> None:
-    """Nhả VRAM sau mỗi model.
-
-    Bắt buộc trên card 8 GB: một job đi qua Demucs → Whisper → VoxCPM2, và ba model
-    cùng ở trên GPU là CUDA out of memory.
-
-    Đo thực tế trên RTX 3070: trong lúc large-v3 float16 chạy, VRAM rảnh về
-    **0,00/8,0 GB**. CTranslate2 cấp bộ nhớ **ngoài** allocator của PyTorch nên
-    ``empty_cache()`` một mình không nhả được gì — người gọi phải xoá object model
-    trước khi gọi hàm này.
-    """
-    gc.collect()
-    try:
-        import torch
-
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-    except ImportError:
-        pass
 
 
 def transcribe(

@@ -82,11 +82,36 @@ RUN python3.11 -m pip install -r /tmp/requirements.txt
 # Chặn ngay tại build nếu python và pip lệch phiên bản. Không có dòng này thì lỗi
 # chỉ lộ ra lúc chạy, dưới dạng "No module named 'torch'" — thông báo không nói gì
 # về nguyên nhân thật.
-RUN python -c "import sys; assert sys.version_info[:2] == (3, 11), sys.version" && \
-    python -c "import sys; assert 'rc' not in sys.version, f'Python release candidate: {sys.version}'" && \
-    python -c "import torch; v=tuple(int(x) for x in torch.__version__.split('+')[0].split('.')[:2]); \
-assert v >= (2, 6), f'torch {torch.__version__} < 2.6: transformers se tu choi torch.load va gong tieng Viet khong chay'" && \
-    python -c "import torch, whisperx, demucs, voxcpm; print('torch', torch.__version__)"
+RUN python - <<'PY'
+import sys
+
+assert sys.version_info[:2] == (3, 11), sys.version
+# Ubuntu 22.04 chi co python3.11 = 3.11.0~rc1 (release candidate) nen phai lay
+# qua deadsnakes. Neu ai doi base image, dong duoi bat lai ngay.
+assert "rc" not in sys.version, f"Python release candidate: {sys.version}"
+
+import torch
+
+v = tuple(int(x) for x in torch.__version__.split("+")[0].split(".")[:2])
+# transformers 5.x tu choi torch.load khi torch < 2.6 (CVE-2025-32434), va duong
+# giong tieng Viet di qua transformers — nen torch cu la khong chay duoc.
+assert v >= (2, 6), f"torch {torch.__version__} < 2.6"
+
+import ctranslate2
+
+c = tuple(int(x) for x in ctranslate2.__version__.split(".")[:2])
+# ctranslate2 < 4.5 link cuDNN 8, con base image CUDA 12.4 mang cuDNN 9. Sai o day
+# thi CTranslate2 abort CUNG ca tien trinh (Fatal Python error: Aborted) — khong
+# try/except nao bat duoc, nen phai chan ngay tai build.
+assert c >= (4, 5), f"ctranslate2 {ctranslate2.__version__} < 4.5 link cuDNN 8"
+
+# Import that, khong chi kiem phien ban: thieu thu vien he thong thi chi import moi lo.
+import demucs  # noqa: F401
+import faster_whisper  # noqa: F401
+import voxcpm  # noqa: F401
+
+print("torch", torch.__version__, "| ctranslate2", ctranslate2.__version__)
+PY
 
 # Model KHÔNG bake vào image — tải vào /models (bind mount ../data/models)
 # bằng scripts/fetch_models.py để đổi image không phải tải lại ~10 GB.

@@ -5,10 +5,17 @@
     make test-gpu
 
 Nhóm test này tồn tại vì một ràng buộc cụ thể của máy đang dùng: **RTX 3070 có
-8 GB VRAM**, mà Whisper large-v3 float16 (~4,7 GB) + Demucs (~2 GB) + VoxCPM2
-(~5 GB) **không thể cùng ở trên card**. Thiết kế chạy tuần tự và gọi
-``free_vram()`` sau mỗi model; nếu ai đó bỏ lệnh nhả VRAM đi thì test ở đây đỏ
-bằng ``CUDA out of memory``, chứ không đỏ bằng một video xấu ba tuần sau.
+8 GB VRAM**. Đo thật bằng ``make measure-load``:
+
+| Model | Giữ trên card | Nạp lại (cache ấm) |
+|---|---|---|
+| Demucs `htdemucs` | 0,54 GB | — |
+| Whisper `large-v3` float16 | ~3,5 GB | 17,5 s |
+| VoxCPM2 | **5,12 GB** | 31,9 s |
+
+Cộng lại vượt 8 GB, nên chúng **không thể cùng ở trên card**. Thiết kế là chạy tuần
+tự và nhả VRAM sau mỗi model; nếu ai bỏ lệnh nhả đi thì test ở đây đỏ ngay bằng một
+con số VRAM, chứ không đỏ ba tuần sau bằng một job chết lúc 2 giờ sáng.
 
 Mỗi test in VRAM đỉnh để so được giữa các lần chạy.
 """
@@ -223,6 +230,7 @@ def test_voxcpm2_sinh_giong_tieng_viet(tmp_path):
         at=now,
     )
 
+    torch = _torch()
     out = VoxCpmSynthesizer().synthesize(
         text="Biểu đồ kiểm soát cho thấy quá trình đang trôi.",
         dest=tmp_path / "voxcpm.wav",
@@ -231,18 +239,39 @@ def test_voxcpm2_sinh_giong_tieng_viet(tmp_path):
     assert out.exists() and out.stat().st_size > 1000
     assert ffmpeg.probe(out).duration_sec > 0.5
 
+    # Model này chiếm 5,12 GB — giữ lại là VRAM rảnh về 0,00/8,0 GB và việc sau
+    # không nạp nổi Whisper. Adapter phải nhả ngay trong ``finally``, và đây là
+    # chỗ bắt nếu ai bỏ hai dòng đó đi.
+    held = torch.cuda.memory_allocated() / 1024**3
+    assert held < 1.0, f"VoxCPM2 còn giữ {held:.2f} GB sau khi sinh giọng"
+
 
 # ---------------- Ba model tuần tự trên cùng một card 8 GB ----------------
 
 
-def test_ba_model_chay_tuan_tu_khong_het_vram(speech_audio, tmp_path):
+def test_bon_buoc_gpu_chay_tuan_tu_khong_het_vram(speech_audio, tmp_path):
     """Đây là test quan trọng nhất của file này.
 
-    Một job thật đi qua Demucs → Whisper → VoxCPM2. Trên card 8 GB, ba model
-    cùng ở trên GPU là ``CUDA out of memory``. Test này chạy đúng chuỗi đó; nếu
-    ai bỏ ``_free_vram()`` thì nó đỏ ở đây, không đỏ ba tuần sau bằng một job
-    thất bại lúc 2 giờ sáng.
+    Một job thật đi qua Demucs → Whisper → gióng → VoxCPM2, **trên cùng một card
+    8 GB**. Cộng dồn nhu cầu của chúng là ~9 GB nên chúng không thể cùng ở trên
+    card; cả chuỗi chỉ chạy được nếu mỗi bước nhả VRAM khi xong.
+
+    Test này đã bắt được một lỗi thật: ``voxcpm.py`` từng giữ model ở biến
+    module-level cho suốt vòng đời tiến trình — đo ra VRAM rảnh **0,00/8,0 GB**,
+    nên việc kế tiếp không nạp nổi Whisper. Đó là loại lỗi không đỏ ở unit test và
+    chỉ lộ ra bằng một job chết lúc 2 giờ sáng, nên nó phải được canh ở đây.
     """
+    from datetime import UTC, datetime
+
+    from src.domain.sourcing.entities import Source
+    from src.domain.sourcing.value_objects import (
+        LicenseEvidence,
+        LicenseScope,
+        LicenseType,
+        Platform,
+        SourceKind,
+        SourceUrl,
+    )
     from src.infrastructure.asr.align import align_known_text
     from src.infrastructure.asr.demucs import separate
     from src.infrastructure.asr.whisper import transcribe
@@ -250,24 +279,55 @@ def test_ba_model_chay_tuan_tu_khong_het_vram(speech_audio, tmp_path):
 
     torch = _torch()
 
+    def held() -> float:
+        return torch.cuda.memory_allocated() / 1024**3
+
     stems = separate(speech_audio, tmp_path / "stems")
-    after_demucs = torch.cuda.memory_allocated() / 1024**3
+    after_demucs = held()
 
     result = transcribe(stems.vocals, language="vi")
-    after_asr = torch.cuda.memory_allocated() / 1024**3
+    after_asr = held()
 
     words = align_known_text(stems.vocals, result.text or "Biểu đồ kiểm soát.", language="vi")
-    after_align = torch.cuda.memory_allocated() / 1024**3
+    after_align = held()
+
+    now = datetime.now(UTC)
+    source = Source(
+        platform=Platform.WEB,
+        kind=SourceKind.SINGLE_URL,
+        url=SourceUrl("https://nmi.vn/test-tuan-tu"),
+        id=0,
+    )
+    source.approve(
+        by="test",
+        evidence=LicenseEvidence(license_type=LicenseType.OWN, evidence_ref="nội bộ"),
+        scope=LicenseScope(may_translate=True, may_modify_audio=True, may_subtitle=True),
+        at=now,
+    )
+    # VoxCPM2 là model nặng nhất (5,12 GB) và đứng CUỐI chuỗi — nó chỉ nạp được nếu
+    # ba bước trên đã nhả sạch. Khởi tạo adapter không chứng minh gì (nạp là lười),
+    # nên ở đây phải sinh giọng thật.
+    voiced = VoxCpmSynthesizer().synthesize(
+        text="Quá trình đang trôi theo ca.",
+        dest=tmp_path / "voiced.wav",
+        clearance=source.clear_for_dubbing(now),
+    )
+    after_tts = held()
 
     print(
         f"\n    VRAM đang giữ sau mỗi bước: demucs {after_demucs:.2f} GB · "
-        f"asr {after_asr:.2f} GB · align {after_align:.2f} GB"
+        f"asr {after_asr:.2f} GB · gióng {after_align:.2f} GB · tts {after_tts:.2f} GB"
     )
-    # Mỗi model phải nhả gần hết sau khi xong. Ngưỡng 1,5 GB là rộng rãi — vượt
-    # nghĩa là có model còn nằm trên card.
-    assert after_align < 1.5, "VRAM không được nhả giữa các bước"
-    assert words
+    # Ngưỡng 1,0 GB là rộng rãi so với model nhỏ nhất trong chuỗi (Demucs 0,54 GB):
+    # vượt nó nghĩa là có model còn nằm trên card, không phải nhiễu đo.
+    for step, value in (
+        ("demucs", after_demucs),
+        ("asr", after_asr),
+        ("gióng", after_align),
+        ("tts", after_tts),
+    ):
+        assert value < 1.0, f"{step} không nhả VRAM: còn giữ {value:.2f} GB"
 
-    # VoxCPM2 là model nặng nhất; nó phải nạp được sau cả hai bước trên
-    _ = VoxCpmSynthesizer()
+    assert words
     assert stems.background.exists()
+    assert voiced.exists() and voiced.stat().st_size > 1000

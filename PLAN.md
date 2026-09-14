@@ -15,8 +15,8 @@
 | Mốc hiện tại | **G2 + GW xong về code** · G0 vẫn mở và giờ đã thành đường găng |
 | Tiến độ tổng | ~75% code Giai đoạn 1; các bước cần GPU/credential chưa chạy thật |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
-| Đã kiểm chứng | **215 unit + 43 integration** test xanh, ruff sạch; **`make smoke` ra video 9:16 thật có phụ đề tiếng Việt, phát được trong `/web/review`**; 77 thuật ngữ đã nạp vào `glossary` |
-| Việc tiếp theo | Chạy Demucs + WhisperX + VoxCPM2 thật trên RTX 3070 8 GB, đo VRAM từng bước. Cần bạn: URL nguồn có quyền, và `ANTHROPIC_API_KEY` |
+| Đã kiểm chứng | **227 unit + 43 integration** test xanh, ruff sạch; **`make smoke` ra video 9:16 thật có phụ đề tiếng Việt, phát được trong `/web/review`**; 77 thuật ngữ đã nạp vào `glossary`; **image worker chạy được model thật trên GPU** (Python 3.11 bản chính thức, torch 2.6+cu124, ctranslate2 4.8.2 khớp cuDNN 9) |
+| Việc tiếp theo | Chạy `make test-gpu` xanh toàn bộ: Demucs + Whisper + gióng + VoxCPM2 tuần tự trên RTX 3070 8 GB, đo VRAM từng bước. Cần bạn: URL nguồn có quyền, và `ANTHROPIC_API_KEY` |
 
 ---
 
@@ -55,13 +55,13 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [ ] **G0.1** Gửi thư xin phép 3–5 hãng thiết bị *(không cần kỹ sư — ROI cao nhất)*
 - [ ] **G0.2** Đọc điều khoản media kit của 3–5 hãng, ghi vào `sources`
 - [~] **G0.3** `YtDlpProbe` chạy đúng trên URL YouTube thật (channel_id, duration, kích thước). **Chỉ đọc metadata công khai, không tải nội dung** — license gate cấm, và đó đúng là bước bảo vệ quyền. Còn phải test Douyin/Bilibili/Facebook
-- [~] **G0.4** Không dùng VideoLingo nữa (D23). **`make smoke` chạy toàn chuỗi ra video thật** — 720×1280, phụ đề tiếng Việt burn bằng Be Vietnam Pro, giọng edge-tts, hiện trong `/web/review`. Các bước cần GPU (Demucs, WhisperX) và LLM vẫn là dữ liệu mẫu
+- [~] **G0.4** Không dùng VideoLingo nữa (D23). **`make smoke` chạy toàn chuỗi ra video thật** — 720×1280, phụ đề tiếng Việt burn bằng Be Vietnam Pro, giọng edge-tts, hiện trong `/web/review`. Các bước cần GPU (Demucs, Whisper) và LLM vẫn là dữ liệu mẫu
 - [ ] **G0.5** Blind test giọng: VoxCPM2 vs FPT.AI vs Viettel bằng thuật ngữ SPC/MSA thật
 - [ ] **G0.6** Clone thử giọng một kỹ sư NMI bằng VoxCPM2
 - [~] **G0.7** `make speech-rate` đo tự động. **Đo được 3,54 âm tiết/giây** với edge-tts — các nguồn trên mạng ghi 5,28–6, lệch ~40%. Còn phải đo lại với VoxCPM2
 - [x] **G0.8** Be Vietnam Pro **đạt** với chuỗi đủ dấu, kiểm bằng libass thật. `make fonts` tải font, `check_font_covers_vietnamese()` kiểm tự động
 - [x] **G0.9** `reframe.py` chế độ `blur` chạy với ffmpeg thật (integration test) — 16:9 → 9:16 không cắt hình
-- [x] **G0.10** GPU chạy trong Docker: **RTX 3070, 8 GB VRAM**, driver 595.97. 8 GB là ca chật — large-v3 (~4,7 GB) + Demucs (~2 GB) + VoxCPM2 (~5 GB) **không thể cùng ở trên card**, phải chạy tuần tự và nhả VRAM sau mỗi model (`_free_vram()`)
+- [x] **G0.10** GPU chạy trong Docker: **RTX 3070, 8 GB VRAM**, driver 595.97. Đã đo thật (`make measure-load`): Demucs 0,54 GB · Whisper `large-v3` float16 ~3,5 GB · **VoxCPM2 5,12 GB**. Cộng lại vượt 8 GB nên **không thể cùng ở trên card** — chạy tuần tự và nhả VRAM sau mỗi model (`src/shared/gpu.py`, D54). Nạp lại tốn 17,5 s (Whisper) và 31,9 s (VoxCPM2)
 - [x] **G0.11** Đúng **2 giọng** tiếng Việt: `vi-VN-HoaiMyNeural` (nữ), `vi-VN-NamMinhNeural` (nam). Đã thành engine `edge` **chỉ cho dev**
 
 ### G1 — Làm tay có công cụ (tuần 2–3)
@@ -75,15 +75,15 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 ### G2 — Tự động hoá pipeline lõi (tuần 3–6)
 
 - [x] **G2.1** `src/shared/` — config, paths, logging
-- [~] **G2.2** `src/infrastructure/db/` — ORM + mapper + repository + UoW xong. **Alembic chưa** (schema mới thêm `sources.external_owner_id`, DB đang tạo từ `01-schema.sql`)
+- [x] **G2.2** `src/infrastructure/db/` — ORM + mapper + repository + UoW + **Alembic là nguồn sự thật duy nhất của schema** (baseline idempotent, `make migrate`). Test tích hợp chạy trên DB `<db>_test` riêng nên không xoá dữ liệu dev
 - [x] **G2.3** `src/interfaces/api/` — hộp thư URL, CRUD `sources`, **license gate** + xác minh chủ sở hữu
 - [~] **G2.4** `src/infrastructure/ingest/ytdlp.py` — wrapper + probe metadata xong; ưu tiên khẩn cho Douyin xong. **Chưa test trên URL Douyin thật** (G0.3)
 - [x] **G2.5** Job queue trên Postgres (`FOR UPDATE SKIP LOCKED`) + thu hồi việc của worker đã chết
-- [~] **G2.6** Adapter + handler worker xong; **chưa chạy với model thật** (cần G0.10)
+- [x] **G2.6** Adapter + handler worker xong, **đã chạy với model thật trên GPU**: Demucs tách stem, Whisper `large-v3` nhận dạng, gióng phụ đề, VoxCPM2 sinh giọng — cả bốn tuần tự trên một card 8 GB, canh bằng `make test-gpu`
 - [~] **G2.7** Prompt + kiểm đầu ra + handler xong; **chưa gọi API thật**
 - [~] **G2.8** Prompt + ngân sách âm tiết xong; glossary chờ G1.3
-- [~] **G2.9** VoxCPM2 + FPT.AI sau cùng port xong; **chưa chạy model thật** (G0.5)
-- [~] **G2.10** `align_known_text()` + gộp dòng phụ đề xong. Đã xác minh WhisperX **có** model gióng tiếng Việt (`nguyenvulebinh/wav2vec2-base-vi`, 32 ngôn ngữ HF), nhưng cần **torch >= 2.6** mới nạp được (D43)
+- [x] **G2.9** VoxCPM2 + FPT.AI sau cùng port xong. **VoxCPM2 đã sinh giọng tiếng Việt thật trên GPU** (`openbmb/VoxCPM2`, sample rate 48 kHz đọc từ model chứ không đoán). Còn lại là blind test chọn giọng (G0.5) — việc đánh giá, không phải việc code
+- [x] **G2.10** `align_known_text()` + gộp dòng phụ đề, **đã chạy với model thật trên GPU**. Không dùng model gióng của WhisperX: `nguyenvulebinh/wav2vec2-base-vi` là `cc-by-nc-4.0` (không thương mại được) và lại thiếu CTC head nên timing vô nghĩa mà không báo lỗi (D49). Thay bằng word timestamp của `large-v3` — **chữ trong phụ đề vẫn là chữ mình viết**, Whisper chỉ cấp thời gian. Bỏ WhisperX hoàn toàn (D53)
 - [x] **G2.11** Trộn audio qua Easel `audio_mix` (nền −20 dB) + `loudnorm`
 - [x] **G2.12** Reframe có điều kiện, chế độ `blur` — test với ffmpeg thật
 - [x] **G2.13** Render: cắt → reframe → trộn → burn ASS + thẻ ghi nguồn → `loudnorm`. Test với ffmpeg thật
@@ -225,6 +225,7 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D51 | `del model` tường minh trước `_free_vram()` | Đo trên RTX 3070: khi large-v3 float16 chạy, VRAM rảnh về **0,00/8,0 GB**. CTranslate2 cấp bộ nhớ **ngoài** allocator của PyTorch nên `empty_cache()` một mình không nhả được gì. Trên card 8 GB, chạy tuần tự là **bắt buộc**, không phải thực hành tốt |
 | D52 | Pin **`ctranslate2==4.8.2`** (>= 4.5), không để faster-whisper tự chọn | Bản 4.4.0 link với **cuDNN 8**, còn base image CUDA 12.4 và torch 2.6 đều mang **cuDNN 9** — không có cuDNN 8 ở đâu. CTranslate2 không nạp được `libcudnn_ops_infer.so.8` và **ABORT cứng cả tiến trình** (`Fatal Python error: Aborted`), không ném exception nên không handler nào bắt được. Nghĩa là **đường ASR trên GPU chưa từng chạy được một lần** — chỉ lộ ra khi chạy test GPU thật |
 | D53 | **Bỏ WhisperX hoàn toàn**, dùng `faster-whisper` trực tiếp | `whisperx 3.3.1` khoá `ctranslate2<4.5` (cuDNN 8) nên không chạy được trên base cuDNN 9; `whisperx 3.8.6` cho phép ctranslate2 mới nhưng đòi `torch~=2.8`, tức một lần di trú nữa cho thứ **ta không còn cần**: phần giá trị nhất của nó là forced alignment, đã bị thay vì license (D49). Phần còn lại — gom batch và VAD — `faster-whisper` có sẵn. Kết quả: **một** đường ASR duy nhất cho cả nhận dạng lời nguồn và mốc thời gian phụ đề |
+| D54 | **Không model nào được giữ trên card qua ranh giới lời gọi** — nạp trong hàm, nhả trong `finally` | Đảo lại thiết kế cũ của `voxcpm.py` (giữ model ở biến module-level cho suốt vòng đời tiến trình). Đo bằng `make measure-load` trên RTX 3070: VoxCPM2 giữ **5,12 GB** làm VRAM rảnh về **0,00/8,0 GB** — việc kế tiếp không nạp nổi Whisper (~3,5 GB). Lý do giữ model là để tránh 120,9 s nạp, nhưng nạp **lại** chỉ mất **31,9 s**: 89 s chênh là biên dịch kernel, trả một lần mỗi tiến trình. Đổi 32 s mỗi việc để không bao giờ `CUDA out of memory` là đổi đáng, nhất là khi mỗi video còn qua 20–35 phút người soát. Hàm nhả chuyển về `src/shared/gpu.py` để ba adapter dùng chung thay vì ba bản copy |
 
 ---
 

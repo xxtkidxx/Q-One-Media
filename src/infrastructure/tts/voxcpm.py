@@ -4,10 +4,25 @@ Chọn VoxCPM2 vì **Apache-2.0** và có `vi`, nên dùng thương mại đư�
 engine mặc định của VoiceStudio (OmniVoice) có weights CC-BY-NC → không dùng
 thương mại được, dù code ứng dụng là giấy phép mở.
 
-Model nạp **lười và giữ lại** (biến module-level): nạp mất hàng chục giây và
-chiếm vài GB VRAM, nên worker chỉ nạp một lần cho suốt vòng đời tiến trình. Đây
-cũng là lý do worker chạy một việc một lần thay vì thread pool — xem
-``src/interfaces/worker/main.py``.
+**Model nhả ngay sau mỗi lần sinh giọng, không giữ lại.** Trước đây adapter này giữ
+model ở biến module-level cho suốt vòng đời tiến trình, vì nạp tốn hàng chục giây. Số
+đo trên card thật (``make measure-load``) cho thấy cách đó không dùng được:
+
+| | VoxCPM2 | Whisper large-v3 |
+|---|---|---|
+| Giữ trên card | **5,12 GB** | ~3,5 GB |
+| VRAM còn rảnh khi đang giữ | **0,00/8,0 GB** | 3,40/8,0 GB |
+| Nạp lần đầu | 120,9 s | 20,2 s |
+| Nạp lại, cache ấm | **31,9 s** | 17,5 s |
+
+Hai con số quyết định: giữ VoxCPM2 lại thì **không còn một byte VRAM nào** cho Whisper,
+mà worker phải chạy cả hai; còn nạp lại chỉ tốn **31,9 s** chứ không phải 120,9 s — phần
+chênh 89 s là biên dịch kernel (``torch.compile``/inductor), trả một lần cho mỗi tiến
+trình. Đổi 32 giây mỗi việc để không bao giờ ``CUDA out of memory`` là đổi đáng, nhất là
+khi mỗi video còn phải qua 20–35 phút người soát.
+
+Nhờ vậy adapter này giờ cùng một giao kèo với ``asr/whisper.py`` và ``asr/demucs.py``:
+**nạp trong hàm, nhả trong ``finally``**. Không adapter nào giữ VRAM qua ranh giới lời gọi.
 """
 
 from __future__ import annotations
@@ -18,6 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from src.domain.sourcing.clearance import DubbingClearance
+from src.shared.gpu import free_vram
 from src.shared.logging import get_logger
 
 log = get_logger(__name__)
@@ -27,8 +43,6 @@ log = get_logger(__name__)
 # Chỉ ``openbmb/VoxCPM2`` có ``vi`` (đã xác minh trên HF: license apache-2.0,
 # 30 ngôn ngữ gồm vi). Để thư viện tự chọn là rủi ro nạp đúng model không dùng được.
 DEFAULT_MODEL_ID = "openbmb/VoxCPM2"
-
-_model: Any = None
 
 
 class TtsFailed(RuntimeError):
@@ -50,9 +64,11 @@ def _device() -> str:
 
 
 def _load_model(model_id: str, *, load_denoiser: bool) -> Any:
-    global _model
-    if _model is not None:
-        return _model
+    """Nạp model. Người gọi **phải** ``del`` nó rồi gọi ``free_vram()`` khi xong.
+
+    Không cache: xem docstring đầu file — trên card 8 GB, giữ model này lại nghĩa là
+    Whisper không nạp được nữa.
+    """
     try:
         from voxcpm import VoxCPM  # type: ignore[import-not-found]
     except ImportError as exc:
@@ -63,7 +79,7 @@ def _load_model(model_id: str, *, load_denoiser: bool) -> Any:
     device = _device()
     log.info("voxcpm.load.start", model_id=model_id, device=device, denoiser=load_denoiser)
     try:
-        _model = VoxCPM.from_pretrained(
+        model = VoxCPM.from_pretrained(
             model_id,
             device=device,
             # Denoiser là model RIÊNG (~vài trăm MB) chỉ dùng để làm sạch audio
@@ -75,8 +91,8 @@ def _load_model(model_id: str, *, load_denoiser: bool) -> Any:
         raise ModelUnavailable(
             f"nạp {model_id} thất bại: {type(exc).__name__}: {exc}"
         ) from exc
-    log.info("voxcpm.load.done", model_id=model_id, sample_rate=_sample_rate(_model))
-    return _model
+    log.info("voxcpm.load.done", model_id=model_id, sample_rate=_sample_rate(model))
+    return model
 
 
 def _sample_rate(model: Any) -> int:
@@ -174,14 +190,15 @@ class VoxCpmSynthesizer:
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         ref = voice_ref or self._default_voice_ref
-        model = _load_model(self._model_id, load_denoiser=self._load_denoiser)
-        log.info(
-            "voxcpm.synthesize",
-            syllables=count_syllables(text),
-            source_id=clearance.source_id,
-            voice_ref=str(ref) if ref else None,
-        )
+        model = None
         try:
+            model = _load_model(self._model_id, load_denoiser=self._load_denoiser)
+            log.info(
+                "voxcpm.synthesize",
+                syllables=count_syllables(text),
+                source_id=clearance.source_id,
+                voice_ref=str(ref) if ref else None,
+            )
             wav = model.generate(
                 text=text,
                 prompt_wav_path=str(ref) if ref else None,
@@ -195,10 +212,19 @@ class VoxCpmSynthesizer:
                 # vừa khung bằng cách đọc nhanh là thứ F2.3 cấm. Tràn thì viết
                 # ngắn lại, và use case quyết định việc đó.
             )
+            # Ghi WAV **trước** khi nhả model: sample rate đọc từ model, và đoán
+            # tần số là sai âm thầm theo cách tệ nhất — xem ``_sample_rate``.
+            _write_wav(wav, dest, sample_rate=_sample_rate(model))
+        except ModelUnavailable:
+            raise
         except Exception as exc:
             raise TtsFailed(f"VoxCPM2 sinh giọng thất bại: {type(exc).__name__}: {exc}") from exc
+        finally:
+            # Xoá model rồi mới nhả: ``empty_cache()`` không trả được gì khi object
+            # còn sống. Bỏ hai dòng này thì Whisper của việc sau hết VRAM.
+            del model
+            free_vram()
 
-        _write_wav(wav, dest, sample_rate=_sample_rate(model))
         return dest
 
 

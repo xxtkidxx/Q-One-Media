@@ -8,13 +8,19 @@ PROD    := -f docker/docker-compose.prod.yml --env-file .env.prod
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-up dev-down dev-logs dev-build prod-up prod-down prod-logs prod-build \
-        test test-int test-gpu test-all lint shell psql fonts models speech-rate corpus glossary-load smoke status clean-work \n        migrate migrate-prod migrate-rev migrate-history
+        migrate migrate-prod migrate-rev migrate-history \
+        test test-int test-gpu test-all lint \
+        fonts models speech-rate measure-load corpus glossary-load \
+        shell psql smoke status clean-work
 
 help:
 	@echo "DEV : dev-up dev-down dev-logs dev-build"
 	@echo "PROD: prod-up prod-down prod-logs prod-build"
 	@echo "DB  : migrate migrate-prod migrate-rev migrate-history"
-	@echo "KHAC: test test-int test-gpu test-all lint fonts speech-rate corpus glossary-load shell psql fonts models speech-rate corpus glossary-load smoke status clean-work \n        migrate migrate-prod migrate-rev migrate-history"
+	@echo "TEST: test test-int test-gpu test-all lint"
+	@echo "MODEL: models fonts speech-rate measure-load"
+	@echo "DATA: corpus glossary-load"
+	@echo "KHAC: smoke status shell psql clean-work"
 
 # ---------------- DEV ----------------
 dev-up:
@@ -107,6 +113,12 @@ glossary-load:
 # Đo được 3,52 âm tiết/giây với edge-tts; các nguồn trên mạng ghi 5,28–6.
 speech-rate:
 	$(DC) $(DEV) run --rm api python scripts/measure_speech_rate.py
+
+# Đo chi phí nạp lại model GPU — trả lời "giữ model trên card hay nhả sau mỗi việc".
+# Card 8 GB không đủ cho Whisper large-v3 và VoxCPM2 cùng nằm trên đó, nên câu hỏi
+# này là bắt buộc phải trả lời bằng số đo, không phải bằng phỏng đoán.
+measure-load:
+	$(DC) $(DEV) run --rm worker python scripts/measure_model_load.py
 
 # Tải font tiếng Việt vào docker/worker/fonts/ — chạy TRƯỚC khi build worker.
 # Font thiếu dải U+1Exx thì libass âm thầm thay font khác và không báo lỗi.

@@ -13,11 +13,11 @@ vendor — lý do ghi trong ``vendor/README.md`` (D23).
 
 from __future__ import annotations
 
-import gc
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from src.shared.gpu import free_vram
 from src.shared.logging import get_logger
 
 log = get_logger(__name__)
@@ -101,16 +101,15 @@ def separate(audio: Path, work_dir: Path) -> Stems:
     except Exception as exc:
         raise SeparationFailed(f"Demucs thất bại: {type(exc).__name__}: {exc}") from exc
     finally:
-        # Nhả VRAM ngay: worker còn phải nạp Whisper và VoxCPM2 sau đó, và ba
-        # model cùng ở trên GPU là đường ngắn nhất tới CUDA out of memory.
-        gc.collect()
-        try:
-            import torch
-
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-        except ImportError:
-            pass
+        # Bỏ tham chiếu tới model VÀ mọi tensor trước khi nhả. Đây là chỗ dễ viết
+        # sai: gọi thẳng empty_cache() ở đây thì không trả lại được gì, vì model,
+        # wav, sources... đều là biến địa phương còn sống tới khi hàm return — và
+        # empty_cache() chỉ trả về driver những khối allocator đang KHÔNG ai giữ.
+        #
+        # Nhả ngay là bắt buộc: worker còn phải nạp Whisper (~3,5 GB) rồi VoxCPM2
+        # (5,12 GB) trên cùng card 8 GB. Xem src/shared/gpu.py.
+        model = wav = sources = by_name = background = None
+        free_vram()
 
     log.info("demucs.done", vocals=str(vocals_path), background=str(background_path))
     return Stems(vocals_path, background_path)
