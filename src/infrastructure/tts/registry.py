@@ -23,6 +23,7 @@ def build_synthesizer(settings: Settings) -> SpeechSynthesizer:
         # duy nhất có tiếng Việt. HF_HOME trong compose đã trỏ cache vào /models.
         return VoxCpmSynthesizer(
             default_voice_ref=Path(settings.tts.voice_ref) if settings.tts.voice_ref else None,
+            default_voice_ref_text=settings.tts.voice_ref_text,
             measured_syllables_per_sec=settings.tts.measured_rate,
         )
 

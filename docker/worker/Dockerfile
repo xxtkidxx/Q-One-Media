@@ -19,7 +19,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # (nvidia không publish 12.4 cho 24.04), nên không thoát được bằng cách đổi base
 # mà không kéo theo đổi cả CUDA và torch.
 #
-# deadsnakes cho 3.11.x ổn định và giữ nguyên CUDA 12.4 + torch 2.5.1 đã kiểm chứng.
+# deadsnakes cho 3.11.x ổn định và giữ nguyên CUDA 12.4.
+#
+# `build-essential` là phụ thuộc **lúc chạy**, không phải lúc build: VoxCPM2 dùng
+# `torch.compile` (backend inductor), và inductor sinh mã C++ rồi gọi compiler ngay
+# trong lần suy luận đầu tiên. Thiếu gcc thì nạp model ném
+# "BackendCompilerFailed … Failed to find C compiler" — lỗi trông như lỗi model,
+# thực ra là thiếu gói hệ thống.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       software-properties-common gpg-agent \
     && add-apt-repository -y ppa:deadsnakes/ppa \
@@ -28,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ffmpeg \
       git curl ca-certificates \
       fonts-dejavu-core fontconfig \
+      build-essential \
     && apt-get purge -y software-properties-common gpg-agent \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*

@@ -65,6 +65,9 @@ class LLMSettings:
 class TTSSettings:
     engine: str = "voxcpm"
     voice_ref: str | None = None
+    # Lời đọc của audio mẫu. Có thì clone giọng khá hơn rõ rệt: model gióng
+    # được âm với chữ thay vì chỉ bắt chước âm sắc.
+    voice_ref_text: str | None = None
     fptai_api_key: str | None = None
     # Tốc độ đọc ĐO ĐƯỢC của giọng đang dùng, âm tiết/giây (G0.7).
     # None là mặc định có chủ ý: chưa đo thì không lập ngân sách âm tiết được, và
@@ -157,6 +160,7 @@ def load_settings() -> Settings:
         tts=TTSSettings(
             engine=_env("TTS_ENGINE", "voxcpm"),
             voice_ref=os.environ.get("VOXCPM_VOICE_REF") or None,
+            voice_ref_text=os.environ.get("VOXCPM_VOICE_REF_TEXT") or None,
             fptai_api_key=os.environ.get("FPTAI_API_KEY") or None,
             measured_rate=_env_float("TTS_SYLLABLES_PER_SEC"),
         ),

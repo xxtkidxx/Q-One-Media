@@ -41,7 +41,15 @@ class ModelUnavailable(RuntimeError):
     retryable = False
 
 
-def _load_model(model_id: str) -> Any:
+def _device() -> str:
+    try:
+        import torch
+    except ImportError:
+        return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+
+def _load_model(model_id: str, *, load_denoiser: bool) -> Any:
     global _model
     if _model is not None:
         return _model
@@ -51,15 +59,42 @@ def _load_model(model_id: str) -> Any:
         raise ModelUnavailable(
             "chưa cài voxcpm — chỉ có trong image worker, không có trong image api"
         ) from exc
-    log.info("voxcpm.load.start", model_id=model_id)
+
+    device = _device()
+    log.info("voxcpm.load.start", model_id=model_id, device=device, denoiser=load_denoiser)
     try:
-        _model = VoxCPM.from_pretrained(model_id)
+        _model = VoxCPM.from_pretrained(
+            model_id,
+            device=device,
+            # Denoiser là model RIÊNG (~vài trăm MB) chỉ dùng để làm sạch audio
+            # mẫu khi clone giọng. Với card 8 GB thì mỗi GB đều đáng, và giọng
+            # mẫu của NMI nên được thu sạch ngay từ đầu chứ không dựa vào denoiser.
+            load_denoiser=load_denoiser,
+        )
     except Exception as exc:
         raise ModelUnavailable(
             f"nạp {model_id} thất bại: {type(exc).__name__}: {exc}"
         ) from exc
-    log.info("voxcpm.load.done", model_id=model_id)
+    log.info("voxcpm.load.done", model_id=model_id, sample_rate=_sample_rate(_model))
     return _model
+
+
+def _sample_rate(model: Any) -> int:
+    """Lấy sample rate thật của model, **không đoán**.
+
+    Lớp công khai ``VoxCPM`` bọc ``self.tts_model`` và không expose
+    ``sample_rate``; thuộc tính đó nằm trên model bên trong. Dùng một giá trị mặc
+    định ở đây là sai âm thầm theo cách tệ nhất: WAV ghi sai tần số thì audio phát
+    sai tốc độ, độ dài đo được sai theo, và **ngân sách âm tiết sai theo nữa** —
+    không ai truy ra được từ đâu.
+    """
+    for obj in (getattr(model, "tts_model", None), model):
+        rate = getattr(obj, "sample_rate", None)
+        if isinstance(rate, int) and rate > 0:
+            return rate
+    raise TtsFailed(
+        "không đọc được sample_rate của VoxCPM2 — không ghi WAV khi chưa biết tần số"
+    )
 
 
 # Âm tiết tiếng Việt ≈ cụm ký tự chữ ngăn bởi khoảng trắng hoặc dấu câu.
@@ -103,9 +138,15 @@ class VoxCpmSynthesizer:
         *,
         model_id: str = DEFAULT_MODEL_ID,
         default_voice_ref: Path | None = None,
+        default_voice_ref_text: str | None = None,
+        load_denoiser: bool = False,
         measured_syllables_per_sec: float | None = None,
     ) -> None:
         self._model_id = model_id
+        # Lời đọc của audio mẫu. Cung cấp thì clone giọng khá hơn rõ rệt vì model
+        # gióng được âm với chữ thay vì chỉ bắt chước âm sắc.
+        self._voice_ref_text = default_voice_ref_text
+        self._load_denoiser = load_denoiser
         self._default_voice_ref = default_voice_ref
         # Cố tình để None nếu chưa đo. Các con số 5,28–6 âm tiết/giây tìm được
         # trên mạng không thống nhất; đặc tả F2.3 yêu cầu tự đo giọng đang dùng
@@ -133,7 +174,7 @@ class VoxCpmSynthesizer:
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         ref = voice_ref or self._default_voice_ref
-        model = _load_model(self._model_id)
+        model = _load_model(self._model_id, load_denoiser=self._load_denoiser)
         log.info(
             "voxcpm.synthesize",
             syllables=count_syllables(text),
@@ -144,14 +185,20 @@ class VoxCpmSynthesizer:
             wav = model.generate(
                 text=text,
                 prompt_wav_path=str(ref) if ref else None,
-                # Không tăng tốc độ đọc để nhồi cho vừa khung: giọng nhanh bất
-                # thường là dấu hiệu video máy làm (F2.3). Kịch bản dài quá thì
-                # viết ngắn lại, việc đó do use case quyết định.
+                prompt_text=self._voice_ref_text if ref else None,
+                # normalize=False (mặc định của thư viện) là CÓ Ý: bộ chuẩn hoá
+                # của VoxCPM làm cho tiếng Trung và tiếng Anh, đưa tiếng Việt vào
+                # thì rủi ro đọc sai số và thuật ngữ. Thay vào đó, prompt viết kịch
+                # bản đã yêu cầu viết số thành chữ ("một phẩy ba ba").
+                #
+                # Cũng không có tham số tăng tốc độ đọc ở đây: nhồi kịch bản cho
+                # vừa khung bằng cách đọc nhanh là thứ F2.3 cấm. Tràn thì viết
+                # ngắn lại, và use case quyết định việc đó.
             )
         except Exception as exc:
             raise TtsFailed(f"VoxCPM2 sinh giọng thất bại: {type(exc).__name__}: {exc}") from exc
 
-        _write_wav(wav, dest, sample_rate=getattr(model, "sample_rate", 16000))
+        _write_wav(wav, dest, sample_rate=_sample_rate(model))
         return dest
 
 
