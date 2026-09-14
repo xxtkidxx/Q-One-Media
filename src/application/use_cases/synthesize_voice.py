@@ -122,10 +122,14 @@ def synthesize_voice(
             )
 
         dest = media_root / "work" / f"item-{item_id:08d}" / "voice_vi.wav"
-        synthesizer.synthesize(
+        # Dùng đường dẫn **trả về**, không dùng ``dest`` tự dựng: port trả về
+        # đường dẫn thật đã ghi vì adapter có thể đổi phần mở rộng — edge-tts chỉ
+        # xuất được MP3. Bỏ qua giá trị trả về thì bước sau đi tìm một file không
+        # tồn tại, và thông báo lỗi trỏ sai chỗ hoàn toàn.
+        audio = synthesizer.synthesize(
             text=item.script_vi or "", dest=dest, clearance=clearance
         )
-        audio_sec = probe.duration_sec(dest)
+        audio_sec = probe.duration_sec(audio)
 
         # Kiểm lần hai: nội dung nhiều số liệu và từ viết tắt đọc chậm hơn văn xuôi,
         # nên đếm âm tiết đúng vẫn có thể ra audio dài quá.
@@ -147,7 +151,7 @@ def synthesize_voice(
                 max_syllables=budget.max_syllables, audio_sec=audio_sec, reason=reason,
             )
 
-        item.mark_voiced(path=MediaAsset(_relative(dest, media_root)))
+        item.mark_voiced(path=MediaAsset(_relative(audio, media_root)))
         uow.items.update(item)
         uow.audit.record(
             entity="item", entity_id=item_id, action="voiced", actor=actor,

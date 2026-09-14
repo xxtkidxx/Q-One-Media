@@ -15,8 +15,8 @@
 | Mốc hiện tại | **G2 + GW xong về code** · G0 vẫn mở và giờ đã thành đường găng |
 | Tiến độ tổng | ~75% code Giai đoạn 1; các bước cần GPU/credential chưa chạy thật |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
-| Đã kiểm chứng | **214 unit + 43 integration** test xanh, ruff sạch; license gate chạy đầu-cuối qua HTTP và qua form web; render chạy với ffmpeg thật; sinh được giọng tiếng Việt thật; **77 thuật ngữ thật đã nạp vào `glossary`** |
-| Việc tiếp theo | **G0.3** test `yt-dlp` trên URL thật từng nền tảng → chạy một video đầu-cuối bằng engine `edge` (không cần GPU). Cần bạn cho một URL nguồn có quyền |
+| Đã kiểm chứng | **215 unit + 43 integration** test xanh, ruff sạch; **`make smoke` ra video 9:16 thật có phụ đề tiếng Việt, phát được trong `/web/review`**; 77 thuật ngữ đã nạp vào `glossary` |
+| Việc tiếp theo | **G0.10** xác nhận GPU trong Docker → thay 4 bước còn giả (Demucs, WhisperX, LLM, alignment) bằng thật. Cần bạn: URL nguồn có quyền, và `ANTHROPIC_API_KEY` |
 
 ---
 
@@ -54,8 +54,8 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 
 - [ ] **G0.1** Gửi thư xin phép 3–5 hãng thiết bị *(không cần kỹ sư — ROI cao nhất)*
 - [ ] **G0.2** Đọc điều khoản media kit của 3–5 hãng, ghi vào `sources`
-- [ ] **G0.3** Test `yt-dlp` trên URL thật **từng nền tảng** — Douyin dễ vỡ nhất
-- [ ] **G0.4** Dựng VideoLingo, chạy 1 video với `target_language: 'Tiếng Việt'`
+- [~] **G0.3** `YtDlpProbe` chạy đúng trên URL YouTube thật (channel_id, duration, kích thước). **Chỉ đọc metadata công khai, không tải nội dung** — license gate cấm, và đó đúng là bước bảo vệ quyền. Còn phải test Douyin/Bilibili/Facebook
+- [~] **G0.4** Không dùng VideoLingo nữa (D23). **`make smoke` chạy toàn chuỗi ra video thật** — 720×1280, phụ đề tiếng Việt burn bằng Be Vietnam Pro, giọng edge-tts, hiện trong `/web/review`. Các bước cần GPU (Demucs, WhisperX) và LLM vẫn là dữ liệu mẫu
 - [ ] **G0.5** Blind test giọng: VoxCPM2 vs FPT.AI vs Viettel bằng thuật ngữ SPC/MSA thật
 - [ ] **G0.6** Clone thử giọng một kỹ sư NMI bằng VoxCPM2
 - [~] **G0.7** `make speech-rate` đo tự động. **Đo được 3,54 âm tiết/giây** với edge-tts — các nguồn trên mạng ghi 5,28–6, lệch ~40%. Còn phải đo lại với VoxCPM2
@@ -208,6 +208,7 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D34 | Glossary: **`term_vi` để trống nghĩa là "giữ nguyên tiếng Anh"** | Corpus nmi.vn cho thấy NMI viết Cpk, MES, OPC UA, PLC nguyên dạng trong câu tiếng Việt vì người trong ngành gọi vậy. Dịch chúng ra làm nội dung *khó* đọc hơn với đúng nhóm cần đọc |
 | D35 | Thuật ngữ rút tự động là **ứng viên cần người duyệt**, không nạp thẳng | Một thuật ngữ dịch sai đi vào **mọi** video sau đó. Script ghi ra TSV, người điền `term_vi`, rồi `make glossary-load` |
 | D36 | `research/nmi-scan/` tái lập bằng script, **không commit bundle `.js`** | Tên file chứa hash nội dung nên đổi mỗi lần nmi.vn build lại — commit vào repo là commit một thứ hết hạn |
+| D37 | Mọi biến container cần phải khai trong `x-common-env` của compose | `--env-file` chỉ thay biến trong *chính file compose*, không tự truyền vào container. Thiếu một dòng là code đọc ra `None` và một guard nổ giữa đường — đã xảy ra với `TTS_SYLLABLES_PER_SEC` |
 
 ---
 
@@ -233,3 +234,4 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | 14/09/2026 | Alembic thành nguồn duy nhất của schema · vendor Easel · tầng media (ffmpeg + ASS + render) · TTS + ngân sách âm tiết · ASR/Demucs/alignment · LLM chọn đoạn + viết kịch bản · publish YouTube/Facebook · mặt tiền web nội bộ · nối dây worker. 191 unit + 43 integration test |
 | 14/09/2026 | Viết nốt 4 script vận hành (`fetch_models`, `fetch_fonts`, `measure_speech_rate`, `youtube_authorize`) · G0.8 + G0.11 xong bằng kiểm chứng thật · engine `edge` cho phép chạy toàn chuỗi **không cần GPU** · đo được tốc độ đọc 3,54 âm tiết/giây |
 | 14/09/2026 | G1.3: tái lập `research/nmi-scan/` bằng script (tham chiếu treo trong tài liệu — thư mục chưa từng tồn tại), rút 77 thuật ngữ từ corpus thật và nạp vào bảng `glossary` |
+| 14/09/2026 | `make smoke` chạy toàn chuỗi không cần GPU → video 9:16 thật có phụ đề tiếng Việt, phát được trong trang duyệt. Ba bug thật lộ ra khi chạy (xem nhật ký commit) |

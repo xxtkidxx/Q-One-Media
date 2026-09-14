@@ -27,6 +27,11 @@ make dev-up                       # API :8000 · n8n :5678
 make migrate                      # alembic upgrade head — BẮT BUỘC lần đầu
 make models                       # tải model vào data/models (~10 GB, chỉ một lần)
 
+make fonts                        # tải font tiếng Việt (trước khi build worker)
+make smoke                        # chạy toàn chuỗi ra một video thật, KHÔNG cần GPU
+make speech-rate                  # đo tốc độ đọc → TTS_SYLLABLES_PER_SEC
+make corpus && make glossary-load  # rút thuật ngữ từ nmi.vn vào bảng glossary
+
 make test                         # unit test, < 1s, không cần DB/GPU/token
 make test-int                     # integration test trên Postgres + ffmpeg thật
 make lint                         # ruff

@@ -231,6 +231,26 @@ def test_trong_nguong_5_phan_tram_thi_chap_nhan(uow, clock):
     assert "voiced" in uow.audit.actions()
 
 
+def test_dung_duong_dan_ADAPTER_TRA_VE_khong_dung_duong_dan_tu_dung(uow, clock):
+    """Bug thật đã sửa: use case bỏ qua giá trị trả về của port.
+
+    edge-tts chỉ xuất MP3 nên adapter ghi ``voice_vi.mp3`` chứ không phải
+    ``voice_vi.wav`` mà use case dựng sẵn. Bỏ qua giá trị trả về thì bước sau đi
+    tìm một file không tồn tại, và thông báo lỗi trỏ sai chỗ hoàn toàn.
+    """
+
+    class Mp3Synthesizer(StubSynthesizer):
+        def synthesize(self, *, text, dest, clearance, voice_ref=None) -> Path:
+            self.calls.append((text, clearance))
+            return dest.with_suffix(".mp3")  # adapter đổi phần mở rộng
+
+    item = scripted_item(uow, script=" ".join(["âm"] * 100), window_sec=60.0)
+    out = run(uow, clock, item.id, Mp3Synthesizer(rate=5.5, audio_sec=20.0))
+
+    assert out.voiced is True
+    assert out.item.path_work.relative_path.endswith(".mp3")
+
+
 def test_duong_dan_luu_la_tuong_doi_khong_tuyet_doi(uow, clock):
     item = scripted_item(uow, script=" ".join(["âm"] * 100), window_sec=60.0)
     out = run(uow, clock, item.id, StubSynthesizer(rate=5.5, audio_sec=20.0))
