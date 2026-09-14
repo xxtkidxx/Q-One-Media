@@ -25,7 +25,7 @@ help:
 # ---------------- DEV ----------------
 dev-up:
 	$(DC) $(DEV) up -d
-	@echo "API  -> http://localhost:$${API_PORT:-8000}/docs"
+	@echo "API  -> http://localhost:$${API_PORT:-8008}/docs"
 	@echo "n8n  -> http://localhost:$${N8N_PORT:-5678}"
 
 dev-down:

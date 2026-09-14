@@ -309,7 +309,7 @@ def main() -> int:
     _say(f"  Khung   : {info.width}x{info.height}  ({info.duration_sec:.1f}s)")
     _say(f"  Trạng thái item #{item_id}: human_review")
     _say()
-    _say(f"  Mở để duyệt: http://localhost:{os.environ.get('API_PORT', '8000')}"
+    _say(f"  Mở để duyệt: http://localhost:{os.environ.get('API_PORT', '8008')}"
          f"/web/review/{item_id}")
     _say()
     if has_gpu:

@@ -23,7 +23,7 @@ Mọi thứ trong Docker. **Không cài Python/ffmpeg/model lên máy host.**
 
 ```bash
 cp .env.dev.example .env.dev      # điền: mật khẩu postgres, N8N_ENCRYPTION_KEY, ANTHROPIC_API_KEY
-make dev-up                       # API :8000 · n8n :5678
+make dev-up                       # API :8008 · n8n :5678
 make migrate                      # alembic upgrade head — BẮT BUỘC lần đầu
 make models                       # tải model vào data/models (~5,8 GB sau khi bỏ model gióng NC)
                                   #   faster-whisper-large-v3  2,9 GB
@@ -42,7 +42,7 @@ make dev-logs                     # tail 50, since 5m
 make dev-down
 ```
 
-Mở trình duyệt vào **http://localhost:8000/web** — bảng điều khiển, khai báo/duyệt nguồn,
+Mở trình duyệt vào **http://localhost:8008/web** — bảng điều khiển, khai báo/duyệt nguồn,
 soát transcript, duyệt video. API docs ở `/docs`.
 
 Production tách hoàn toàn — dữ liệu riêng, port riêng, chạy song song được với dev:
