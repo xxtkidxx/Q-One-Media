@@ -262,6 +262,46 @@ class ClaudeScriptWriter(_ClaudeBase):
         )
         return script
 
+    def write_from_prompt(
+        self, *, brief: str, title: str, max_syllables: int, glossary: dict[str, str]
+    ) -> str:
+        """Giai đoạn 2: viết từ đề bài của người dùng, không có transcript nguồn.
+
+        Cùng ``SCRIPT_SYSTEM`` với Giai đoạn 1 vì yêu cầu về giọng điệu, thuật ngữ
+        và ngân sách âm tiết không đổi. Khác một điều được nói thẳng trong prompt:
+        không có nguồn để bám, nên model **không được bịa số liệu** — thiếu số thì
+        nói định tính, và con số cụ thể là việc của người nhập đề bài.
+        """
+        parts = [
+            f"Tiêu đề video: {title or '(chưa đặt)'}",
+            f"**Ngân sách: tối đa {max_syllables} âm tiết.** Viết đúng hoặc ngắn hơn.",
+            "",
+            "Đề bài do người của NMI nhập:",
+            brief,
+            "",
+            "Không có transcript nguồn. Viết bằng kiến thức chuyên ngành phổ quát và "
+            "đúng đề bài. **Không bịa số liệu, tên khách hàng, hay kết quả dự án** — "
+            "nếu đề bài không cho con số thì viết định tính.",
+        ]
+        if glossary:
+            parts += [
+                "",
+                "Bảng thuật ngữ bắt buộc dùng đúng:",
+                *(f"- {src} → {vi}" for src, vi in sorted(glossary.items())),
+            ]
+        data = self._call_tool(
+            system=SCRIPT_SYSTEM, prompt="\n".join(parts), tool=SCRIPT_TOOL
+        )
+        script = str(data.get("script_vi", "")).strip()
+        if not script:
+            raise LlmFailed("model trả kịch bản rỗng")
+        log.info(
+            "llm.script.from_prompt.done",
+            model_estimate=data.get("syllable_estimate"),
+            budget=max_syllables,
+        )
+        return script
+
 
 def format_transcript_with_timestamps(segments: list[dict[str, Any]]) -> str:
     """Đổi segment của Whisper thành text có timestamp cho prompt.

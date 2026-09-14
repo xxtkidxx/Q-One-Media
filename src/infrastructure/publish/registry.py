@@ -42,7 +42,14 @@ def build_publishers(settings: Settings) -> dict[PublishPlatform, VideoPublisher
     else:
         log.info("publish.facebook.disabled", reason="chưa có Page ID / token (G4.1)")
 
-    # TikTok cố tình không có adapter: client chưa audit bị khoá ở SELF_ONLY và
-    # tối đa 5 user/24h, nên tự động hoá không đem lại gì. Xem G7.1 — chỉ làm nếu
-    # dữ liệu G5 chứng minh đáng làm.
+    if yt.tiktok_access_token:
+        from src.infrastructure.publish.tiktok import TikTokPublisher
+
+        publishers[PublishPlatform.TIKTOK] = TikTokPublisher(
+            access_token=yt.tiktok_access_token,
+            privacy_level=yt.tiktok_privacy_level,
+        )
+    else:
+        log.info("publish.tiktok.disabled", reason="chưa có TIKTOK_ACCESS_TOKEN (G7.1)")
+
     return publishers

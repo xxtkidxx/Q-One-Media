@@ -146,3 +146,30 @@ class ScriptWriter(Protocol):
         previous_attempt: str | None = None,
         rewrite_reason: str | None = None,
     ) -> str: ...
+
+
+class PromptScriptWriter(Protocol):
+    """Giai đoạn 2: viết kịch bản từ **đề bài của người dùng**, không từ transcript.
+
+    Tách khỏi ``ScriptWriter`` vì đầu vào khác bản chất: ở đó là lời của người
+    khác cần viết lại, ở đây là yêu cầu nội dung của chính NMI.
+    """
+
+    def write_from_prompt(
+        self,
+        *,
+        brief: str,
+        title: str,
+        max_syllables: int,
+        glossary: dict[str, str],
+    ) -> str: ...
+
+
+class ImageGenerator(Protocol):
+    """Sinh ảnh minh hoạ theo prompt. Trả đường dẫn tương đối, hoặc ``None``.
+
+    ``None`` là câu trả lời hợp lệ: chưa cấu hình nhà cung cấp thì cảnh đó rơi về
+    thẻ thương hiệu, pipeline không dừng.
+    """
+
+    def generate(self, *, prompt: str, out_dir: Path, name: str) -> str | None: ...

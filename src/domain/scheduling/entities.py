@@ -31,6 +31,9 @@ class JobTask(StrEnum):
     SYNTHESIZE = "synthesize"
     ALIGN = "align"
     RENDER = "render"
+    # Giai đoạn 2: không có video nguồn để cắt, hình dựng từ kịch bản hình
+    # (ảnh/video người dùng đưa vào, biểu đồ từ số liệu, thẻ thương hiệu).
+    COMPOSE = "compose"
     PUBLISH = "publish"
 
 

@@ -124,16 +124,16 @@ Quyết định kỹ thuật: **Jinja2 + HTMX server-rendered**, không SPA — 
 
 ### G3 — Publish YouTube (tuần 5–7)
 
-- [ ] **G3.1** GCP project + OAuth consent + credential
+- [!] **G3.1** GCP project + OAuth consent + credential — **việc của bạn**, agent không tạo tài khoản Google được. Xong thì đặt `YOUTUBE_CLIENT_SECRET_FILE` + `YOUTUBE_TOKEN_FILE` rồi chạy `python scripts/youtube_authorize.py`
 - [x] **G3.2** `src/infrastructure/publish/` — registry bỏ qua nền tảng chưa cấu hình
-- [~] **G3.3** Adapter YouTube (resumable upload, mặc định `private`); **chờ credential G3.1**
-- [ ] **G3.4** Video công khai đầu tiên
+- [x] **G3.3** Adapter YouTube xong về code (resumable upload, mặc định `private`, mô tả có ghi nguồn + nhãn AI, phân loại lỗi retry/không). Chạy thật **chờ G3.1**
+- [!] **G3.4** Video công khai đầu tiên — chờ G3.1
 
 ### G4 — Facebook (tuần 7–9)
 
-- [ ] **G4.1** Page + Business Manager + app
-- [ ] **G4.2** Thử ngoại lệ App Review cho app nội bộ; nếu không thì nộp review
-- [~] **G4.3** Adapter Facebook Reels (3 pha start/upload/finish); **chờ Page + token G4.1**
+- [!] **G4.1** Page + Business Manager + app — **việc của bạn**. Xong thì đặt `FB_PAGE_ID` + `FB_PAGE_ACCESS_TOKEN`
+- [!] **G4.2** Thử ngoại lệ App Review cho app nội bộ; nếu không thì nộp review
+- [x] **G4.3** Adapter Facebook Reels xong về code (3 pha start/upload/finish, mặc định không publish ngay). Chạy thật **chờ G4.1**
 
 ### G5 — Đánh giá GĐ1 (tuần 9–11)
 
@@ -142,19 +142,23 @@ Quyết định kỹ thuật: **Jinja2 + HTMX server-rendered**, không SPA — 
 - [ ] **G5.3** Công duyệt thực tế so với ước tính 13–22 giờ/tháng
 - [ ] **G5.4** Quyết định: mở rộng GĐ1 hay sang GĐ2
 
-### G6 — Giai đoạn 2 (tuần 11–15)
+### G6 — Giai đoạn 2 · Studio (xong về code)
 
-- [ ] **G6.1** Crawler text cho website đã khai báo (`content_type='article'`)
-- [ ] **G6.2** Lọc relevance theo taxonomy nmi.vn
-- [ ] **G6.3** **Prompt đa nguồn (3–5 bài) + lưu vết nguồn** *(ràng buộc pháp lý, D.1)*
-- [ ] **G6.4** Thư viện ảnh phân lớp: ảnh NMI → stock → AI chỉ cho bối cảnh
-- [ ] **G6.5** Render biểu đồ và bảng so sánh từ số liệu thật
-- [ ] **G6.6** Template Remotion đúng brand *(xác minh license trước)*
-- [ ] **G6.7** Dùng lại tầng publish, giọng, glossary của GĐ1
+Không crawl bài của ai: người dùng nhập đề bài, hệ thống viết kịch bản. Xem D.1
+của đặc tả — vấn đề pháp lý biến mất thay vì phải quản lý.
+
+- [x] **G6.1** Trang `/web/studio`: nhập đề bài + thời lượng + tên người tạo; nguồn nội bộ `own` tạo một lần rồi dùng lại
+- [x] **G6.2** `PromptScriptWriter` — LLM viết kịch bản tiếng Việt từ đề bài, cùng ngân sách âm tiết và glossary của GĐ1; prompt cấm bịa số liệu/tên khách hàng
+- [x] **G6.3** `Item.from_prompt` vào thẳng `scripted` rồi dùng lại nguyên chuỗi lồng tiếng → gióng phụ đề → duyệt → publish
+- [x] **G6.4** Kịch bản hình bốn lớp (`domain/authoring/visuals.py`): ảnh/video người dùng đưa vào → kho có license → biểu đồ từ số liệu nhập tay → AI **chỉ** cho bối cảnh; không có gì thì thẻ thương hiệu, không bịa hình
+- [x] **G6.5** Biểu đồ cột dựng bằng ffmpeg từ số liệu người dùng gõ (`Nhãn = số`), mỗi cột cao đúng theo con số
+- [x] **G6.6** **Bỏ Remotion** — dựng bằng ffmpeg (`infrastructure/media/compose.py`), xem D.2: tránh cả Company License lẫn việc kéo Node/npm vào stack
+- [x] **G6.7** Dùng lại tầng publish, giọng, glossary, gate duyệt của GĐ1 — không nhân bản một dòng nào
+- [ ] **G6.8** Chạy thật một video Studio đầu-cuối trên GPU (cần `TTS_SYLLABLES_PER_SEC` và worker chạy)
 
 ### G7 — Tuỳ chọn (tuần 15+)
 
-- [ ] **G7.1** TikTok — chỉ nếu dữ liệu G5 chứng minh đáng làm
+- [x] **G7.1** Adapter TikTok Content Posting API (`infrastructure/publish/tiktok.py`): init → upload theo chunk → fetch status, hỏi `creator_info` để lấy mức hiển thị hợp lệ thay vì đoán. Mặc định `SELF_ONLY` vì client chưa audit chỉ đăng được riêng tư; hạn mức thì retry, còn lỗi audit/token thì không. **Chờ `TIKTOK_ACCESS_TOKEN`** để chạy thật
 - [ ] **G7.2** Bản tiếng Anh *(nội dung song ngữ đã có, chỉ tốn TTS)*
 - [ ] **G7.3** LinkedIn
 
@@ -287,6 +291,7 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | 14/09/2026 | Đơn giản hóa form theo yêu cầu: chuyển bằng chứng/chuỗi ghi nguồn vào mục bổ sung không bắt buộc. Khi trống, web ghi xác nhận giấy phép nội bộ; CC BY tự sinh attribution để renderer vẫn tuân thủ điều kiện giấy phép. 22 web integration xanh |
 | 14/09/2026 | Đổi luồng URL sang chủ động: thêm nguồn chỉ lưu hồ sơ; sau khi duyệt, mỗi nguồn video có nút Start tải riêng và chỉ khi bấm mới enqueue download. Empty-state rút còn “Chưa có video”. 23 web integration xanh, Ruff sạch |
 | 14/09/2026 | Thêm endpoint snapshot `/web/item-status` và polling 3 giây trên trang nguồn. Badge stage, progress và lỗi đổi trực tiếp; tới transcript review/chọn đoạn/human review thì tự reload để hiện form mới, khôi phục nguồn đang mở. 23 web integration xanh, Ruff sạch |
+| 15/09/2026 | G6 Studio: trang `/web/studio` nhập đề bài → LLM viết kịch bản → item vào thẳng `scripted` rồi dùng lại chuỗi GĐ1; kịch bản hình bốn lớp + biểu đồ từ số liệu nhập tay; bộ dựng `compose.py` bằng ffmpeg (bỏ Remotion); adapter sinh ảnh tuỳ chọn. G7.1: adapter TikTok. G3.3/G4.3 xác nhận xong về code, chỉ chờ credential. 15 unit authoring + 34 web integration xanh, Ruff sạch |
 | 15/09/2026 | GW.23: “Nạp video” tạo nguồn mới kèm khai giấy phép trong cùng form; nạp vào nguồn có sẵn chuyển sang endpoint riêng của nút Upload file. Trang chi tiết nguồn xếp dọc và lịch sử rẽ nhánh theo clip. 30 web integration xanh, Ruff sạch |
 | 15/09/2026 | GW.22: nhãn trạng thái tiếng Việt toàn bộ mặt tiền; tab “Clip đã tạo” có nút việc kế tiếp + popup video/kịch bản/hành động; thêm use case `queue_publish` cho nút Xuất bản; lịch sử rẽ nhánh theo clip; bỏ tab duyệt thành phẩm và bỏ % ở video gốc. 28 web integration + 16 publish flow xanh, Ruff sạch |
 | 15/09/2026 | GW.21: workflow thành sơ đồ tham chiếu trung tính; trang nguồn gộp clip con thành thống kê trên dòng video gốc (snapshot polling nay trả `parent_item_id` để gộp lại phía trình duyệt) và `?open_source=` mở sẵn nguồn. 27 web integration xanh, Ruff sạch |

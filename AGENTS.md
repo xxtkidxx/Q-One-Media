@@ -7,7 +7,7 @@
 **Q One Media** — pipeline tự động hoá short video tiếng Việt cho NMI Technologies (phần mềm chất lượng & điều hành sản xuất, thương hiệu Q One).
 
 - **Giai đoạn 1:** video nước ngoài đã khai báo → chọn lọc → biên tập → **lồng tiếng Việt + phụ đề** → publish YouTube/Facebook.
-- **Giai đoạn 2:** bài viết nước ngoài đã khai báo → viết kịch bản gốc → ảnh + giọng → render → publish.
+- **Giai đoạn 2 (Studio):** người dùng nhập đề bài → LLM viết kịch bản tiếng Việt → giọng + hình (ảnh/video đưa vào, biểu đồ từ số liệu, AI cho bối cảnh) → render → publish.
 
 **Đặc tả duy nhất:** `docs/phuong-an-cuoi-cung.md`. **Trạng thái và việc cần làm:** `PLAN.md`.
 

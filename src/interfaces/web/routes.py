@@ -32,6 +32,13 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import and_, or_, select
 
+from src.application.use_cases.author_video import (
+    STUDIO_SOURCE_URL,
+    add_shot,
+    create_video_from_prompt,
+    load_visual_plan,
+    remove_shot,
+)
 from src.application.use_cases.manage_sources import (
     ApproveSourceCommand,
     DeclareSourceCommand,
@@ -57,8 +64,10 @@ from src.application.use_cases.upload_video import register_uploaded_video
 from src.application.use_cases.write_script import (
     create_manual_clips,
     edit_transcript,
+    load_glossary,
     load_transcript,
 )
+from src.domain.authoring.visuals import Shot, ShotKind
 from src.domain.errors import DomainError
 from src.domain.production.value_objects import (
     HARD_SEGMENT_MAX_SEC,
@@ -75,16 +84,23 @@ from src.domain.sourcing.value_objects import (
     LicenseType,
     Platform,
     SourceKind,
+    SourceUrl,
 )
 from src.infrastructure.clock import SystemClock
 from src.infrastructure.db import mappers
 from src.infrastructure.db.orm import AuditLogRow, ItemRow
 from src.infrastructure.db.uow import SqlUnitOfWork
+from src.infrastructure.llm.registry import build_script_writer
 from src.infrastructure.media import ffmpeg
 from src.interfaces.api.deps import get_clock, get_config, get_uow
 from src.shared.config import Settings
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+
+# File đính kèm không bắt buộc: một cảnh có thể là prompt AI hoặc số liệu biểu đồ
+# thay vì file. Khai một lần ở đây vì gọi ``File()`` trong default là bẫy dùng chung
+# giữa các lần gọi.
+OPTIONAL_FILE = File()
 
 router = APIRouter(prefix="/web", tags=["web"], include_in_schema=False)
 
@@ -309,6 +325,184 @@ def dashboard(request: Request, uow: Uow):
 
 
 # ---------------- Nguồn ----------------
+
+
+# ---------------- Studio: video dựng từ đề bài nhập vào ----------------
+
+
+@router.get("/studio", response_class=HTMLResponse)
+def studio_page(request: Request, uow: Uow, config: Config):
+    """Danh sách video Studio + form tạo mới.
+
+    Tách khỏi trang Nguồn vì bản chất khác: ở đó là nội dung của người khác cần
+    giấy phép, ở đây là nội dung của NMI cần một người chịu trách nhiệm.
+    """
+    with uow:
+        studio = uow.sources.get_by_url(SourceUrl(STUDIO_SOURCE_URL))
+        items = (
+            [
+                mappers.item_to_domain(row)
+                for row in uow.session.scalars(
+                    select(ItemRow)
+                    .where(ItemRow.source_id == studio.id)
+                    .order_by(ItemRow.id.desc())
+                    .limit(50)
+                )
+            ]
+            if studio
+            else []
+        )
+    rows = []
+    for item in items:
+        plan = load_visual_plan(config.media_root, item.id or 0)
+        step, total, percent, label = _progress_detail(item.stage)
+        rows.append({
+            "item": item,
+            "stage_label": _stage_label(item.stage),
+            "step": step, "total": total, "percent": percent, "step_label": label,
+            "shots": plan.shots if plan else (),
+            "video_url": (
+                "/media/" + item.path_output.relative_path if item.path_output else None
+            ),
+        })
+    return _render(
+        request,
+        "studio.html",
+        title="Studio",
+        rows=rows,
+        seg_min=HARD_SEGMENT_MIN_SEC,
+        seg_max=HARD_SEGMENT_MAX_SEC,
+        seg_best_min=RECOMMENDED_SEGMENT_MIN_SEC,
+        seg_best_max=RECOMMENDED_SEGMENT_MAX_SEC,
+        image_provider=config.visuals.provider if config.visuals.enabled else None,
+    )
+
+
+@router.post("/studio", response_class=HTMLResponse)
+def studio_create(
+    request: Request,
+    uow: Uow,
+    clock: Clock,
+    config: Config,
+    brief: Annotated[str, Form()],
+    title: Annotated[str, Form()] = "",
+    target_sec: Annotated[float, Form()] = 60.0,
+    actor: Annotated[str, Form()] = "web",
+):
+    try:
+        with uow:
+            glossary = load_glossary(uow, "en")
+        result = create_video_from_prompt(
+            brief=brief,
+            title=title,
+            target_sec=target_sec,
+            author=actor,
+            writer=build_script_writer(config.llm),
+            speech_rate=config.tts.measured_rate,
+            glossary=glossary,
+            media_root=config.media_root,
+            uow=uow,
+            clock=clock,
+        )
+    except (DomainError, RuntimeError, ValueError) as exc:
+        return _error_page(request, "Không tạo được video", str(exc))
+    return RedirectResponse(url=f"/web/studio?created={result.item.id}", status_code=303)
+
+
+@router.post("/studio/{item_id}/shots", response_class=HTMLResponse)
+async def studio_add_shot(
+    request: Request,
+    item_id: int,
+    uow: Uow,
+    config: Config,
+    kind: Annotated[str, Form()],
+    seconds: Annotated[float, Form()] = 6.0,
+    caption: Annotated[str, Form()] = "",
+    prompt: Annotated[str, Form()] = "",
+    chart_data: Annotated[str, Form()] = "",
+    actor: Annotated[str, Form()] = "web",
+    media: Annotated[UploadFile | None, OPTIONAL_FILE] = None,
+):
+    """Thêm một cảnh: file người dùng đưa vào, prompt cho AI, hoặc số liệu biểu đồ."""
+    try:
+        shot_kind = ShotKind(kind)
+        asset: str | None = None
+        if shot_kind in (ShotKind.UPLOAD, ShotKind.STOCK):
+            if media is None or not media.filename:
+                raise ValueError("chọn một file ảnh hoặc video")
+            suffix = Path(media.filename).suffix.lower()
+            if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm"}:
+                raise ValueError("chỉ nhận PNG, JPG, WEBP, MP4, MOV hoặc WEBM")
+            destination = config.paths.source / "studio" / f"{uuid4().hex}{suffix}"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("xb") as output:
+                while chunk := await media.read(1024 * 1024):
+                    output.write(chunk)
+            asset = config.paths.relative(destination)
+        data: tuple[tuple[str, float], ...] = ()
+        if shot_kind is ShotKind.CHART:
+            data = _parse_chart_data(chart_data)
+        add_shot(
+            item_id,
+            shot=Shot(
+                kind=shot_kind,
+                seconds=seconds,
+                caption=caption.strip(),
+                asset=asset,
+                prompt=prompt.strip(),
+                data=data,
+            ),
+            media_root=config.media_root,
+            uow=uow,
+            actor=actor.strip() or "web",
+        )
+    except (DomainError, ValueError) as exc:
+        return _error_page(request, "Không thêm được cảnh", str(exc))
+    finally:
+        if media is not None:
+            await media.close()
+    return RedirectResponse(url=f"/web/studio?shot_added={item_id}", status_code=303)
+
+
+@router.post("/studio/{item_id}/shots/{index}/delete", response_class=HTMLResponse)
+def studio_remove_shot(
+    request: Request,
+    item_id: int,
+    index: int,
+    uow: Uow,
+    config: Config,
+    actor: Annotated[str, Form()] = "web",
+):
+    try:
+        remove_shot(
+            item_id, index=index, media_root=config.media_root, uow=uow,
+            actor=actor.strip() or "web",
+        )
+    except DomainError as exc:
+        return _error_page(request, "Không xoá được cảnh", str(exc))
+    return RedirectResponse(url=f"/web/studio?shot_removed={item_id}", status_code=303)
+
+
+def _parse_chart_data(raw: str) -> tuple[tuple[str, float], ...]:
+    """Đọc số liệu dạng ``Nhãn = giá trị`` mỗi dòng.
+
+    Không đoán định dạng và không nhận số liệu từ model: mỗi cột trong biểu đồ
+    phải truy được về một con số người dùng gõ vào.
+    """
+    pairs: list[tuple[str, float]] = []
+    for line in raw.splitlines():
+        if not line.strip():
+            continue
+        if "=" not in line:
+            raise ValueError(f"dòng '{line.strip()}' phải có dạng: Nhãn = số")
+        label, _, value = line.partition("=")
+        try:
+            pairs.append((label.strip(), float(value.strip().replace(",", "."))))
+        except ValueError as exc:
+            raise ValueError(f"'{value.strip()}' không phải số") from exc
+    if not pairs:
+        raise ValueError("biểu đồ phải có ít nhất một số liệu")
+    return tuple(pairs)
 
 
 @router.get("/item-status")

@@ -850,3 +850,97 @@ def test_chi_mount_thu_muc_output(client):
     không có lý do gì để chúng ra được HTTP."""
     assert client.get("/media/source/a.mp4").status_code == 404
     assert client.get("/media/work/a.wav").status_code == 404
+
+
+# ---------------- Giai đoạn 2: Studio (nội dung tự viết) ----------------
+
+
+def test_studio_tao_video_tu_de_bai_nguoi_dung_nhap(client, monkeypatch):
+    """Giai đoạn 2 không có license gate vì không dùng tác phẩm của ai — thứ thay
+    thế là tên người tạo, và nó phải đi vào item."""
+    from src.interfaces.web import routes
+
+    monkeypatch.setattr(
+        routes, "build_script_writer",
+        lambda _settings: type(
+            "W", (), {"write_from_prompt": lambda self, **kw: "Cpk nói gì, và không nói gì."}
+        )(),
+    )
+    empty = client.get("/web/studio")
+    assert empty.status_code == 200
+    assert "Chưa có video nào" in empty.text
+
+    resp = client.post(
+        "/web/studio",
+        data={
+            "brief": "Giải thích Cpk cho quản lý nhà máy.",
+            "title": "Cpk trong 60 giây",
+            "target_sec": "60",
+            "actor": "quan.nguyen",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    from src.interfaces.api.deps import get_uow
+
+    uow = get_uow()
+    with uow:
+        item = uow.session.execute(
+            text("SELECT id, stage, script_vi, script_sources, path_source FROM items")
+        ).one()
+        task = uow.session.execute(text("SELECT task FROM jobs")).scalar_one()
+        source = uow.session.execute(
+            text("SELECT status, license_type FROM sources")
+        ).one()
+    assert item.stage == "scripted"
+    assert item.script_vi.startswith("Cpk nói gì")
+    assert item.script_sources == ["prompt:quan.nguyen"]
+    assert item.path_source is None  # không dùng thước phim của ai
+    assert task == "synthesize"  # bỏ qua tải/nhận dạng/chọn đoạn
+    assert (source.status, source.license_type) == ("approved", "own")
+
+    page = client.get("/web/studio").text
+    assert "Cpk trong 60 giây" in page
+    assert "Thẻ thương hiệu" in page  # chưa đưa hình thì không bịa ảnh
+
+
+def test_studio_them_canh_bieu_do_tu_so_lieu_nhap_tay(client, monkeypatch):
+    from src.interfaces.web import routes
+
+    monkeypatch.setattr(
+        routes, "build_script_writer",
+        lambda _settings: type(
+            "W", (), {"write_from_prompt": lambda self, **kw: "Kịch bản thử."}
+        )(),
+    )
+    client.post(
+        "/web/studio",
+        data={"brief": "MES là gì", "title": "MES", "target_sec": "45", "actor": "q"},
+        follow_redirects=False,
+    )
+    resp = client.post(
+        "/web/studio/1/shots",
+        data={
+            "kind": "chart",
+            "seconds": "6",
+            "caption": "Cpk theo tháng",
+            "chart_data": "T1 = 1.10\nT2 = 1.33",
+            "actor": "q",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 303
+
+    page = client.get("/web/studio").text
+    assert "Biểu đồ số liệu" in page
+    assert "T1=1.1" in page.replace(" ", "")
+
+    # Số liệu sai định dạng thì nói rõ, không nuốt
+    bad = client.post(
+        "/web/studio/1/shots",
+        data={"kind": "chart", "seconds": "6", "chart_data": "T1 1.10", "actor": "q"},
+        follow_redirects=False,
+    )
+    assert bad.status_code == 200
+    assert "Nhãn = số" in bad.text

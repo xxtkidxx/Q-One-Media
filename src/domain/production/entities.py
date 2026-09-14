@@ -90,7 +90,7 @@ class Item:
 
     _dubbing_cleared: bool = field(default=False, repr=False)
 
-    # ---------------- Khởi tạo: hai đường, không có đường thứ ba ----------------
+    # ---------------- Khởi tạo: ba đường, không có đường thứ tư ----------------
 
     @classmethod
     def accept(cls, *, url: SourceUrl, clearance: DownloadClearance, **kw) -> Item:
@@ -113,6 +113,46 @@ class Item:
             url=url,
             stage=ItemStage.LICENSE_BLOCKED,
             stage_error=reason,
+        )
+
+    @classmethod
+    def from_prompt(
+        cls,
+        *,
+        url: SourceUrl,
+        source_id: int,
+        script_vi: str,
+        title: str,
+        target_sec: float,
+        author: str,
+    ) -> Item:
+        """Giai đoạn 2, đường thủ công: **người dùng tự nhập yêu cầu nội dung**.
+
+        Không có ``SynthesisClearance`` ở đây, và đó là đúng chứ không phải lỗ
+        hổng: quy tắc ≥3 nguồn tồn tại để khỏi diễn giải lại *cách viết* của
+        người khác. Khi đề bài do chính người của NMI viết ra thì không có bài
+        nào bị diễn giải — tác giả là NMI.
+
+        Cái thay thế cho clearance là **trách nhiệm có tên**: ``author`` bắt buộc
+        và đi vào audit, giống như gate duyệt luôn đòi tên người duyệt. Ai nhập
+        nội dung của người khác vào đây thì đó là quyết định có tên người chịu.
+        """
+        if not script_vi.strip():
+            raise InvariantViolation("kịch bản rỗng")
+        if not author.strip():
+            raise InvariantViolation("phải ghi tên người nhập nội dung")
+        return cls(
+            source_id=source_id,
+            url=url,
+            title_original=title,
+            stage=ItemStage.SCRIPTED,
+            script_vi=script_vi,
+            script_sources=(f"prompt:{author.strip()}",),
+            segment=Segment(0.0, target_sec, rationale="Giai đoạn 2 · nội dung tự nhập"),
+            duration_sec=int(target_sec),
+            aspect_ratio=PORTRAIT_9_16,
+            include_attribution=False,
+            _dubbing_cleared=True,
         )
 
     # ---------------- Chuyển trạng thái ----------------

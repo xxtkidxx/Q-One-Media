@@ -3,7 +3,7 @@
 Pipeline tự động hoá short video tiếng Việt cho **NMI Technologies Việt Nam** — phần mềm chất lượng và điều hành sản xuất, thương hiệu **Q One**.
 
 - **Giai đoạn 1:** video nước ngoài đã khai báo → chọn lọc → biên tập → **lồng tiếng Việt + phụ đề** → publish YouTube/Facebook
-- **Giai đoạn 2:** bài viết nước ngoài đã khai báo → viết kịch bản gốc → ảnh + giọng → render → publish
+- **Giai đoạn 2 (Studio):** người dùng nhập đề bài → LLM viết kịch bản tiếng Việt → giọng + hình (ảnh/video đưa vào, biểu đồ từ số liệu, AI cho bối cảnh) → render → publish
 
 **Trạng thái:** lõi Giai đoạn 1 đã có code và test — license gate, hộp thư URL, hàng đợi việc,
 pipeline media, mặt tiền web nội bộ, adapter publish. Các bước cần GPU hoặc credential nền tảng

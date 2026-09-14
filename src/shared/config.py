@@ -103,6 +103,28 @@ class PublishSettings:
     youtube_token_file: str | None = None
     fb_page_id: str | None = None
     fb_page_access_token: str | None = None
+    tiktok_access_token: str | None = None
+    # Client chưa qua audit của TikTok **chỉ** đăng được ở chế độ riêng tư. Mặc
+    # định SELF_ONLY để không ai vô tình phát hành công khai bằng một token test.
+    tiktok_privacy_level: str = "SELF_ONLY"
+
+
+@dataclass(frozen=True)
+class VisualSettings:
+    """Sinh ảnh minh hoạ cho Giai đoạn 2 — **tuỳ chọn**.
+
+    Chưa cấu hình là trạng thái bình thường: cảnh AI rơi về thẻ thương hiệu và
+    video vẫn ra. Một pipeline dừng lại vì thiếu API key sinh ảnh là đổi một thứ
+    trang trí lấy cả dây chuyền.
+    """
+
+    provider: str = "none"
+    api_key: str = ""
+    model: str = "gemini-3-pro-image"
+
+    @property
+    def enabled(self) -> bool:
+        return self.provider not in ("", "none") and bool(self.api_key)
 
 
 @dataclass(frozen=True)
@@ -120,6 +142,7 @@ class Settings:
     # Có mặc định để thêm trường mới không làm vỡ mọi chỗ dựng Settings.
     # An toàn vì __post_init__ vẫn từ chối prod khi chưa đặt WEB_USER/WEB_PASSWORD.
     web: WebSettings = field(default_factory=WebSettings)
+    visuals: VisualSettings = field(default_factory=VisualSettings)
     paths: MediaPaths = field(init=False)
 
     def __post_init__(self) -> None:
@@ -173,12 +196,19 @@ def load_settings() -> Settings:
             user=os.environ.get("WEB_USER") or None,
             password=os.environ.get("WEB_PASSWORD") or None,
         ),
+        visuals=VisualSettings(
+            provider=_env("IMAGE_PROVIDER", "none").strip().lower(),
+            api_key=os.environ.get("IMAGE_API_KEY") or os.environ.get("GEMINI_API_KEY", ""),
+            model=_env("IMAGE_MODEL", "gemini-3-pro-image"),
+        ),
         publish=PublishSettings(
             enabled=_env_bool("PUBLISH_ENABLED", False),
             youtube_client_secret_file=os.environ.get("YOUTUBE_CLIENT_SECRET_FILE") or None,
             youtube_token_file=os.environ.get("YOUTUBE_TOKEN_FILE") or None,
             fb_page_id=os.environ.get("FB_PAGE_ID") or None,
             fb_page_access_token=os.environ.get("FB_PAGE_ACCESS_TOKEN") or None,
+            tiktok_access_token=os.environ.get("TIKTOK_ACCESS_TOKEN") or None,
+            tiktok_privacy_level=_env("TIKTOK_PRIVACY_LEVEL", "SELF_ONLY").strip().upper(),
         ),
     )
 

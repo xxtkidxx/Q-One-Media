@@ -88,7 +88,7 @@ Tổng hợp toàn bộ khảo sát. **Mọi thành phần đều Apache-2.0, MI
 | Reframe 9:16 | **Easel `reframe.py`** chế độ `blur` | 1.002 | Apache-2.0 | Không mất nội dung — đúng cho video thiết bị |
 | **Publish** | **Tự viết** — YouTube Data API + Facebook Graph API | — | — | Postiz là AGPL; hai nền tảng thì tự viết rẻ hơn |
 | Sinh ảnh (GĐ2) | **Imagen 4 Fast** hoặc **Seedream** + thư viện ảnh NMI | — | API | Chỉ cho ảnh bối cảnh, không cho ảnh kỹ thuật |
-| Render template brand (GĐ2) | **Remotion** | — | Thương mại nếu >3 người | Brand riêng; xác minh điều khoản trước |
+| Render template brand (GĐ2) | **ffmpeg** (bỏ Remotion) | — | BSD/LGPL, đã có sẵn | Không kéo Node/npm; xem D.2 |
 
 ### B.1. Những gì đã loại và vì sao
 
@@ -177,63 +177,76 @@ Cộng việc tích hợp và test: **~2–3 tuần dev**.
 
 ---
 
-## Phần D — Kiến trúc Giai đoạn 2
+## Phần D — Kiến trúc Giai đoạn 2 (Studio)
 
-**Đầu vào:** bài viết từ các trang nước ngoài do NMI khai báo.
-**Đầu ra:** short video từ nội dung viết mới, không dùng thước phim của ai.
+**Đầu vào:** đề bài do người của NMI nhập ("làm video 60 giây giải thích Cpk cho quản lý nhà máy").
+**Đầu ra:** short video tiếng Việt, hình dựng từ tài sản của NMI, không dùng thước phim của ai.
 
 ```
-① NẠP NGUỒN ─ DÙNG LẠI bảng sources, content_type='article'
-       ▼      + crawler text (RSS / fetch trang)
-② LỌC RELEVANCE ─ theo taxonomy nmi.vn: SPC, MSA, MES, historian,
-       │           AI vision, kết nối máy, 6 ngành mục tiêu
+① ĐỀ BÀI ─ người dùng nhập tại /web/studio: nội dung, thời lượng, người tạo
        ▼
-③ GOM NHIỀU NGUỒN CÙNG CHỦ ĐỀ ─ 3–5 bài, KHÔNG phải 1 bài
-       │   ⚠ Đây là yêu cầu pháp lý, không phải tuỳ chọn — xem D.1
+② VIẾT KỊCH BẢN ─ LLM viết tiếng Việt trong ngân sách âm tiết + glossary
+       │           [DÙNG LẠI prompt/ngân sách của GĐ1]
        ▼
-④ VIẾT KỊCH BẢN GỐC ─ tổng hợp dữ kiện → viết bằng góc nhìn NMI
-       │                lưu vết nguồn đã đọc cho từng kịch bản
-       ▼               [Claude Sonnet 5 / Opus 5 cho bài khó + glossary]
-       ├──────────────────────┬──────────────────────┐
-       ▼                      ▼                      ▼
-⑤ TTS VoxCPM2          ⑥ HÌNH ẢNH phân lớp    ⑦ BIỂU ĐỒ / BẢNG SO SÁNH
-   CÙNG GIỌNG GĐ1        L1 ảnh NMI thật         render từ số liệu thật
-   [dùng lại]            L2 stock có license      — dạng nội dung mạnh nhất
-                         L3 AI chỉ cho bối cảnh     cho khán giả kỹ thuật
-       │                      │                      │
-       └──────────────────────┴──────────────────────┘
-                         ▼
-⑧ RENDER ─ template Remotion đúng brand (#081120, Inter/IBM Plex Mono,
-       │    bám theo qone-30s-stable.mp4) + phụ đề + nhạc nền
+③ TTS ─ VoxCPM2, CÙNG GIỌNG GĐ1                    [DÙNG LẠI]
        ▼
-⑨ NGƯỜI DUYỆT ─ nhẹ hơn GĐ1 vì không phải soát transcript ngoại ngữ
+④ GIÓNG PHỤ ĐỀ ─ word timestamp của Whisper        [DÙNG LẠI]
        ▼
-⑩ PUBLISH ─ DÙNG LẠI tầng publish của GĐ1
+⑤ KỊCH BẢN HÌNH ─ bốn lớp, xếp theo ưu tiên:
+       │   L1 ảnh/video người dùng đưa vào (tài sản NMI)
+       │   L2 kho có license đã tải sẵn
+       │   L3 biểu đồ dựng từ SỐ LIỆU NGƯỜI DÙNG NHẬP
+       │   L4 AI sinh theo prompt — CHỈ cho ảnh bối cảnh
+       │   Không có gì thì thẻ thương hiệu; không bao giờ bịa hình
+       ▼
+⑥ DỰNG ─ ffmpeg: nối cảnh 9:16 → phụ đề ASS → loudnorm
+       ▼
+⑦ NGƯỜI DUYỆT ─ cùng gate với GĐ1                  [DÙNG LẠI]
+       ▼
+⑧ PUBLISH ─ cùng tầng publish của GĐ1              [DÙNG LẠI]
 ```
 
-### D.1. Giai đoạn 2 rủi ro pháp lý thấp hơn — và cách giữ nó như vậy
+### D.1. Vì sao không crawl bài của người khác
 
-**Bản quyền bảo hộ cách diễn đạt, không bảo hộ dữ kiện.** Giai đoạn 1 dùng chính thước phim được bảo hộ nên buộc phải có license. Giai đoạn 2 có thể đọc nhiều bài để hiểu dữ kiện rồi **viết** nội dung của riêng NMI — dữ kiện *"Cpk dùng độ lệch chuẩn trong nhóm mẫu"* không thuộc về ai.
+Thiết kế đầu tiên gom 3–5 bài nước ngoài rồi tổng hợp. Bỏ hẳn: nó kéo theo một
+crawler phải nuôi, một bộ lọc relevance phải chỉnh, và một ràng buộc pháp lý phải
+canh (viết từ ít nguồn là diễn giải lại bài người khác). Đề bài do người của NMI
+nhập thì **không có tác phẩm nào của ai bị dùng lại** — vấn đề biến mất thay vì
+được quản lý.
 
-Hai điều kiện kỹ thuật để giữ vị thế đó, phải đưa vào thiết kế chứ không để tuỳ người dùng:
+Đổi lại, model không có nguồn để bám nên prompt cấm nó bịa: không số liệu, không
+tên khách hàng, không kết quả dự án. Con số cụ thể vào bằng hai đường có thể truy
+được — người nhập viết thẳng trong đề bài, hoặc dựng thành cảnh biểu đồ.
 
-- **Prompt phải nhận 3–5 nguồn cùng lúc.** Một nguồn duy nhất gần như chắc chắn cho ra bản diễn giải sát nguyên văn; nhiều nguồn buộc phải tổng hợp. Đây là ràng buộc nên kiểm tự động: pipeline từ chối chạy nếu chỉ có 1 nguồn cho một chủ đề.
-- **Lưu vết nguồn cho từng kịch bản** — bài nào đã đọc để viết ra nó. Vừa để kiểm chứng thông tin kỹ thuật, vừa là bằng chứng quy trình.
+### D.2. Vì sao không dùng Remotion
 
-Ranh giới: **viết** thì an toàn, **dịch** thì không. Đó là khác biệt về bản chất, không phải mức độ.
+Hai lý do độc lập, cùng chặn. *License:* Remotion đòi Company License cho doanh
+nghiệp — một khoản chi và một ràng buộc pháp lý cho thứ chưa cần. *Hạ tầng:* nó
+kéo Node + npm + một image nữa vào stack đã cố tình không có npm (D21/D25).
 
-### D.2. Thứ Giai đoạn 2 thừa hưởng từ Giai đoạn 1
+Thứ thật sự cần là ảnh đứng yên nối nhau, thẻ chữ đúng brand, biểu đồ từ số liệu,
+phụ đề, giọng đọc. ffmpeg làm đủ, và nó đã là phụ thuộc cứng của Giai đoạn 1 —
+không thêm một mắt xích nào có thể hỏng.
+
+### D.3. Ranh giới hình ảnh
+
+Ảnh AI **chỉ** cho bối cảnh. Một biểu đồ Cpk do model vẽ trông rất thuyết phục và
+hoàn toàn bịa, nên số liệu luôn đi qua cảnh biểu đồ, nơi từng cột cao đúng theo
+con số được nhập vào. Chưa cấu hình nhà cung cấp sinh ảnh cũng không sao: cảnh đó
+rơi về thẻ thương hiệu và video vẫn ra.
+
+### D.4. Thứ Giai đoạn 2 thừa hưởng từ Giai đoạn 1
 
 | Thành phần | Trạng thái khi vào GĐ2 |
 |---|---|
-| Hệ quản lý nguồn + license registry | Xong, chỉ thêm `content_type='article'` |
+| Ngân sách âm tiết + prompt viết tiếng Việt | Xong, dùng ngay |
 | Glossary EN↔VI và ZH↔VI | Xong, dùng ngay |
-| Giọng VoxCPM2 đã clone và hiệu chỉnh | Xong — khoản thu hồi lớn nhất |
-| Tầng publish | Xong |
-| Brand kit: style phụ đề ASS, `loudnorm`, font đã test glyph | Xong |
-| Bộ lọc relevance theo taxonomy nmi.vn | Xong |
+| Giọng VoxCPM2 | Xong — khoản thu hồi lớn nhất |
+| Gióng phụ đề + style ASS + font đã test glyph | Xong |
+| Gate duyệt của người + tầng publish | Xong |
+| Hệ quản lý nguồn | Xong — Studio là một nguồn nội bộ `own` |
 
-**Ước lượng: ~60% công việc Giai đoạn 2 đã được xây ở Giai đoạn 1.** Phần mới: crawler text, prompt viết kịch bản gốc, sinh ảnh, template Remotion.
+**Phần mới chỉ còn: form nhập đề bài, kịch bản hình, và bộ dựng ffmpeg.**
 
 ---
 
@@ -248,11 +261,11 @@ Ranh giới: **viết** thì an toàn, **dịch** thì không. Đó là khác bi
 | TTS | **$0** — VoxCPM2 local | **$0** |
 | ASR + Demucs + reframe + render | $0 — local | $0 |
 | Sinh ảnh | — | $5–10 |
-| Remotion license (nếu >3 người) | — | ~$100 `[cần xác minh remotion.pro]` |
+| Render GĐ2 | — | 0 — dựng bằng ffmpeg, không mua Remotion (D.2) |
 | API publish | $0 | $0 |
 | **Tổng** | **$11–16/tháng** | **$16–130/tháng** |
 
-Toàn bộ thành phần mã nguồn mở đều miễn phí và cho dùng thương mại. Khoản duy nhất có thể phát sinh đáng kể là Remotion license ở GĐ2 — và có thể hoãn bằng cách render bằng ffmpeg ở giai đoạn đầu.
+Toàn bộ thành phần mã nguồn mở đều miễn phí và cho dùng thương mại. Khoản Remotion license ở GĐ2 đã **bỏ hẳn**: dựng bằng ffmpeg (D.2).
 
 ### E.2. Ràng buộc thật không phải tiền
 
@@ -282,7 +295,7 @@ Toàn bộ thành phần mã nguồn mở đều miễn phí và cho dùng thư�
 | **G3** Publish YouTube | 5–7 | GCP + OAuth + Data API sau `publish()` | Video công khai đầu tiên, số liệu thật |
 | **G4** Facebook | 7–9 | Page + Business Manager + Graph API (thử ngoại lệ App Review cho app nội bộ) | Kênh nào hiệu quả hơn |
 | **G5** Đánh giá GĐ1 | 9–11 | Nguồn bền không? Engagement? Công duyệt chịu được? Nền tảng nguồn nào tốt nhất? | Mở rộng GĐ1 hay sang GĐ2 |
-| **G6** Giai đoạn 2 | 11–15 | Crawler text · prompt đa nguồn + lưu vết · sinh ảnh phân lớp · template Remotion · dùng lại toàn bộ hạ tầng GĐ1 | Video nội dung gốc đầu tiên |
+| **G6** Giai đoạn 2 (Studio) | 11–15 | Form nhập đề bài · viết kịch bản từ prompt · kịch bản hình bốn lớp · dựng bằng ffmpeg · dùng lại toàn bộ hạ tầng GĐ1 | Video nội dung gốc đầu tiên |
 | **G7** Tuỳ chọn | 15+ | TikTok (nếu dữ liệu chứng minh đáng) · bản tiếng Anh (nội dung song ngữ đã có, chỉ tốn TTS) · LinkedIn | |
 
 **G0 vẫn phải kiểm chứng kỹ thuật và phạm vi quyền.** Giấy phép được giả định là đã có, nhưng mỗi URL vẫn phải khớp đúng chủ nguồn, phạm vi sửa audio, phụ đề, tái xuất bản và sử dụng thương mại trước khi pipeline cấp clearance.
@@ -411,4 +424,4 @@ Theo đúng thứ tự, tất cả nằm trong tuần G0 và không cần chờ 
 
 **Đã xác minh trực tiếp từ nguồn gốc:** toàn bộ số star, license, ngày cập nhật (GitHub REST API, 13/09/2026) · license và danh sách ngôn ngữ VoxCPM2 (HF model card `openbmb/VoxCPM2`: `license: apache-2.0`, có `vi`) · bảng engine và điều khoản license của VoiceStudio (README) · cấu trúc pipeline và `config.yaml` của VideoLingo · độ độc lập của các script Easel (đọc phần import) · quota YouTube Data API · giới hạn TikTok Content Posting API · quyền Facebook Reels · chính sách monetization YouTube · giá ElevenLabs và FPT.AI · nội dung nmi.vn (bundle production).
 
-**Chưa xác minh, cần kiểm ở G0:** tên giọng tiếng Việt của edge-tts · **chất lượng thực tế giọng Việt của VoxCPM2** (đây là ẩn số quan trọng nhất còn lại) · chất lượng bản dịch thuật ngữ SPC/MSA của VideoLingo · điều khoản Remotion company license · tiếng Việt trong MOSS-TTS-v1.5 / dots.tts / MOSS-TTS-Nano (các phương án dự phòng cho VoxCPM2).
+**Chưa xác minh, cần kiểm ở G0:** tên giọng tiếng Việt của edge-tts · **chất lượng thực tế giọng Việt của VoxCPM2** (đây là ẩn số quan trọng nhất còn lại) · chất lượng bản dịch thuật ngữ SPC/MSA của VideoLingo · tiếng Việt trong MOSS-TTS-v1.5 / dots.tts / MOSS-TTS-Nano (các phương án dự phòng cho VoxCPM2).

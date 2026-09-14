@@ -166,9 +166,8 @@ def test_cau_hinh_ca_hai_thi_co_ca_hai():
     assert set(pubs) == {PublishPlatform.YOUTUBE, PublishPlatform.FACEBOOK}
 
 
-def test_tiktok_khong_co_adapter():
-    """Client chưa audit bị khoá ở SELF_ONLY, tối đa 5 user/24h — tự động hoá
-    không đem lại gì. Chỉ làm nếu dữ liệu G5 chứng minh đáng làm (G7.1)."""
+def test_tiktok_chi_bat_khi_co_token():
+    """G7.1: có adapter, nhưng chưa có token thì im lặng bỏ qua như mọi nền tảng."""
     pubs = build_publishers(
         _settings(
             youtube_client_secret_file="/s.json",
@@ -178,6 +177,104 @@ def test_tiktok_khong_co_adapter():
         )
     )
     assert PublishPlatform.TIKTOK not in pubs
+
+    with_token = build_publishers(_settings(tiktok_access_token="tok"))
+    assert set(with_token) == {PublishPlatform.TIKTOK}
+
+
+# ---------------- TikTok (G7.1) ----------------
+
+
+def test_tiktok_mac_dinh_self_only_va_khong_doan_quyen_hien_thi():
+    """Client chưa audit chỉ đăng được riêng tư; đoán sai mức là hỏng cả lần đăng."""
+    from src.infrastructure.publish.tiktok import TikTokPublisher
+
+    tt = TikTokPublisher(access_token="tok")
+    assert tt._privacy_level == "SELF_ONLY"
+
+
+def _tiktok_with_options(monkeypatch, options, **kw):
+    from src.infrastructure.publish import tiktok as tiktok_mod
+
+    monkeypatch.setattr(
+        tiktok_mod.TikTokPublisher,
+        "_get",
+        lambda self, client, url: {"data": {"privacy_level_options": options}},
+    )
+    return tiktok_mod.TikTokPublisher(access_token="tok", **kw)
+
+
+def test_tiktok_ton_trong_muc_da_cau_hinh_khi_tai_khoan_duoc_phep(monkeypatch):
+    tt = _tiktok_with_options(
+        monkeypatch, ["PUBLIC_TO_EVERYONE", "SELF_ONLY"], privacy_level="PUBLIC_TO_EVERYONE"
+    )
+    assert tt._pick_privacy(client=None) == "PUBLIC_TO_EVERYONE"
+
+
+@pytest.mark.parametrize(
+    "options,expected",
+    [
+        (["PUBLIC_TO_EVERYONE", "SELF_ONLY"], "SELF_ONLY"),
+        (["FOLLOWER_OF_CREATOR", "PUBLIC_TO_EVERYONE"], "FOLLOWER_OF_CREATOR"),
+    ],
+)
+def test_tiktok_muc_cau_hinh_khong_duoc_phep_thi_ha_ve_kin_nhat(options, expected, monkeypatch):
+    """Hạ về mức kín nhất, không leo lên công khai — sai hướng này là sự cố thật."""
+    tt = _tiktok_with_options(monkeypatch, options, privacy_level="MUTUAL_FOLLOW_FRIENDS")
+    assert tt._pick_privacy(client=None) == expected
+
+
+def test_tiktok_khong_co_muc_nao_thi_bao_loi_chi_ro_can_kiem_gi(monkeypatch):
+    from src.infrastructure.publish.tiktok import PublishRejected
+
+    tt = _tiktok_with_options(monkeypatch, [])
+    with pytest.raises(PublishRejected) as exc:
+        tt._pick_privacy(client=None)
+    assert "audit" in str(exc.value)
+
+
+@pytest.mark.parametrize(
+    "status,body",
+    [(429, "rate_limit_exceeded"), (500, "server"), (400, "spam_risk_too_many_posts")],
+)
+def test_loi_han_muc_tiktok_thi_retry_duoc(status, body):
+    from src.infrastructure.publish.tiktok import TikTokPublisher
+
+    assert TikTokPublisher._classify(status, body).retryable is True
+
+
+@pytest.mark.parametrize(
+    "status,body",
+    [(403, "unaudited_client_can_only_post_to_private_accounts"), (401, "access_token_invalid")],
+)
+def test_loi_audit_va_token_tiktok_thi_khong_retry(status, body):
+    from src.infrastructure.publish.tiktok import TikTokPublisher
+
+    error = TikTokPublisher._classify(status, body)
+    assert error.retryable is False
+
+
+def test_tiktok_gop_tieu_de_ghi_nguon_va_hashtag_vao_mot_o_chu():
+    """TikTok chỉ có một ô chữ — ghi nguồn phải nằm trong đó, không mất đi."""
+    from src.infrastructure.publish.tiktok import MAX_TITLE, TikTokPublisher
+
+    title = TikTokPublisher._build_title(
+        META, clearance(attribution="Nguồn: Vendor GmbH — CC BY 4.0")
+    )
+    assert title.startswith("Cpk nói gì")
+    assert "Nguồn: Vendor GmbH" in title
+    assert "#spc" in title
+    assert len(title) <= MAX_TITLE
+
+
+def test_tiktok_het_cho_thi_cat_hashtag_chu_khong_cat_ghi_nguon():
+    from src.infrastructure.publish.tiktok import MAX_TITLE, TikTokPublisher
+
+    long_credit = "Nguồn: " + "Vendor GmbH · " * 200
+    title = TikTokPublisher._build_title(META, clearance(attribution=long_credit))
+    assert len(title) <= MAX_TITLE
+    assert "Nguồn: Vendor GmbH" in title
+    assert "#spc" not in title
 
 
 # ---------------- Mặc định an toàn ----------------

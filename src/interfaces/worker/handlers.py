@@ -54,6 +54,7 @@ NEXT_TASK: dict[JobTask, JobTask | None] = {
     JobTask.SYNTHESIZE: JobTask.ALIGN,
     JobTask.ALIGN: JobTask.RENDER,
     JobTask.RENDER: None,          # → human_review, chờ người
+    JobTask.COMPOSE: None,         # → human_review, chờ người
     JobTask.PUBLISH: None,
 }
 
@@ -61,6 +62,14 @@ NEXT_TASK: dict[JobTask, JobTask | None] = {
 def enqueue_next(job: Job, uow: UnitOfWork, *, item_id: int) -> None:
     """Xếp bước tiếp theo, nếu có."""
     nxt = NEXT_TASK.get(job.task)
+    if nxt is JobTask.RENDER:
+        # Giai đoạn 2 không có video nguồn để cắt: cùng một bước "dựng" nhưng hai
+        # cách dựng khác hẳn nhau. Rẽ theo dữ liệu của item chứ không theo một cờ
+        # cấu hình — item không có file nguồn thì không thể render kiểu Giai đoạn 1.
+        with uow:
+            item = uow.items.get(item_id)
+        if item is not None and item.path_source is None:
+            nxt = JobTask.COMPOSE
     if nxt is None:
         log.info("worker.chain.stop", after=str(job.task), reason="gate của người hoặc kết thúc")
         return
@@ -330,6 +339,70 @@ def handle_render(job: Job, uow: UnitOfWork, settings: Settings) -> None:
     log.info("worker.render.awaiting_review", item_id=item_id)
 
 
+def handle_compose(job: Job, uow: UnitOfWork, settings: Settings) -> None:
+    """Giai đoạn 2: dựng video từ kịch bản hình rồi **dừng ở gate người duyệt**."""
+    import json
+
+    from src.application.use_cases.author_video import (
+        resolve_generated_shots,
+    )
+    from src.domain.authoring.visuals import default_plan
+    from src.domain.production.value_objects import MediaAsset
+    from src.infrastructure.media.compose import ComposeRequest, FfmpegComposer
+    from src.infrastructure.visuals.registry import build_image_generator
+
+    item_id = _need_item(job)
+    with uow:
+        item = uow.items.get(item_id)
+        if item is None or item.path_work is None:
+            raise ValueError(f"item #{item_id} chưa có audio giọng")
+        voice = settings.paths.absolute(item.path_work.relative_path)
+        title = item.title_original or "Q One"
+        target = item.segment.duration_sec if item.segment else 30.0
+
+    plan = resolve_generated_shots(
+        item_id,
+        generator=build_image_generator(settings),
+        media_root=settings.media_root,
+        uow=uow,
+    )
+    if plan is None:  # pragma: no cover - resolve_ luôn trả kịch bản
+        plan = default_plan(title=title, target_sec=target)
+
+    work = transcript_dir(settings.media_root, item_id)
+    cues_file = work / "cues.json"
+    cues = (
+        [(c["start"], c["end"], c["text"]) for c in json.loads(cues_file.read_text("utf-8"))]
+        if cues_file.exists()
+        else []
+    )
+    output = settings.paths.output / f"item-{item_id:08d}" / "final.mp4"
+
+    FfmpegComposer().compose(
+        ComposeRequest(
+            plan=plan,
+            voice_audio=voice,
+            subtitle_cues=cues,
+            work_dir=work / "compose",
+            output=output,
+            media_root=settings.media_root,
+        )
+    )
+
+    with uow:
+        item = uow.items.get(item_id)
+        item.mark_mixed()
+        item.mark_rendered(path=MediaAsset(settings.paths.relative(output)))
+        item.send_to_human_review()
+        uow.items.update(item)
+        uow.audit.record(
+            entity="item", entity_id=item_id, action="composed", actor="worker",
+            detail={"output": settings.paths.relative(output), "shots": len(plan.shots)},
+        )
+        uow.commit()
+    log.info("worker.compose.awaiting_review", item_id=item_id)
+
+
 def handle_publish(job: Job, uow: UnitOfWork, settings: Settings) -> None:
     """Đăng bài. Chỉ chạy với item đã ở ``approved`` — policy tự chặn nếu không."""
     from src.application.use_cases.publish_item import publish_item
@@ -382,6 +455,7 @@ HANDLERS: dict[JobTask, Handler] = {
     JobTask.SYNTHESIZE: handle_synthesize,
     JobTask.ALIGN: handle_align,
     JobTask.RENDER: handle_render,
+    JobTask.COMPOSE: handle_compose,
     JobTask.PUBLISH: handle_publish,
 }
 
@@ -396,5 +470,6 @@ REQUIRED_STAGE: dict[JobTask, tuple[ItemStage, ...]] = {
     JobTask.SYNTHESIZE: (ItemStage.SCRIPTED,),
     JobTask.ALIGN: (ItemStage.VOICED,),
     JobTask.RENDER: (ItemStage.ALIGNED, ItemStage.MIXED),
+    JobTask.COMPOSE: (ItemStage.ALIGNED, ItemStage.MIXED),
     JobTask.PUBLISH: (ItemStage.APPROVED,),
 }
