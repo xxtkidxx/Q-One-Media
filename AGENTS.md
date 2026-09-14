@@ -125,7 +125,6 @@ src/interfaces/      Biên ngoài. Mỏng có chủ ý.
   worker/              Vòng lặp lấy việc từ hàng đợi
 src/shared/          Cross-cutting: config.py, paths.py, logging.py
 
-vendor/              Code bên thứ ba đã vendor — xem vendor/README.md
 tests/unit/          Không network, không GPU, không DB. Chạy < 1s
 tests/integration/   Cần container. Đánh dấu @pytest.mark.integration
 tests/fakes.py       Hiện thực in-memory của mọi port
@@ -169,16 +168,25 @@ cả youtube.com.
 - Thời gian: luôn UTC có timezone, lấy qua port `Clock`. So sánh `expires_at` với `datetime`
   naive sẽ nổ `TypeError` ngay trong license gate.
 - Log JSON ra stdout; Docker gom vào `data/{env}/logs/`.
-- **Không sửa file trong `vendor/`.** Cần đổi hành vi thì bọc adapter trong `src/infrastructure/`.
+- **Không có thư mục `vendor/`.** Code tham khảo từ dự án mở được **viết lại thành module của chính dự án**, đặt trong `src/` và sửa tự do như mọi code khác. Đổi lại: ghi xuất xứ trong docstring của module, và khai vào `THIRD_PARTY_NOTICES.md` — đó là nghĩa vụ license, không phải thủ tục.
 
-### Về `vendor/`
+### Mượn code từ dự án mở
 
-Code lấy từ VideoLingo (Apache-2.0) và Easel (Apache-2.0). Mỗi thư mục con phải có `ORIGIN.md`
-ghi: repo, commit SHA, ngày lấy, file nào, đã sửa gì. Vừa là nghĩa vụ license vừa để đối chiếu
-upstream về sau.
+Không sao chép nguyên trạng và không giữ bản sao "không được đụng vào". Đọc code
+upstream, hiểu thuật toán, rồi **viết lại thành module của dự án** trong `src/` — đặt
+tên theo nghiệp vụ ở đây, ném lỗi theo phân loại retry của hàng đợi, viết chú thích
+bằng tiếng Việt như phần còn lại.
 
-**Không vendor bước tải của VideoLingo** (`core/_1_ytdlp.py`) — đã có
-`src/infrastructure/ingest/ytdlp.py` thay thế, lý do ghi trong docstring file đó.
+Hai việc bắt buộc khi làm vậy:
+
+1. **Docstring của module** ghi repo, commit và license gốc.
+2. **`THIRD_PARTY_NOTICES.md`** ghi đã lấy gì, đưa vào đâu, và **sửa những gì**. Với
+   Apache-2.0 thì nêu rõ thay đổi là nghĩa vụ license, không phải thủ tục nội bộ.
+
+Đã làm theo cách này với **Easel** (Apache-2.0) cho đổi khung hình và trộn audio.
+Riêng **VideoLingo** thì không lấy gì: bước tải của họ (`core/_1_ytdlp.py`) chạy
+`pip install --upgrade` mỗi lần gọi và ghi vào thư mục toàn cục — xem D19 và D23
+trong `PLAN.md`.
 
 ---
 

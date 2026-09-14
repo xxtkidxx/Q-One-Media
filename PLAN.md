@@ -55,7 +55,7 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [ ] **G0.1** Gửi thư xin phép 3–5 hãng thiết bị *(không cần kỹ sư — ROI cao nhất)*
 - [ ] **G0.2** Đọc điều khoản media kit của 3–5 hãng, ghi vào `sources`
 - [~] **G0.3** `YtDlpProbe` chạy đúng trên URL YouTube thật (channel_id, duration, kích thước). **Chỉ đọc metadata công khai, không tải nội dung** — license gate cấm, và đó đúng là bước bảo vệ quyền. Còn phải test Douyin/Bilibili/Facebook
-- [~] **G0.4** Không dùng VideoLingo nữa (D23). **`make smoke` chạy toàn chuỗi ra video thật** — 720×1280, phụ đề tiếng Việt burn bằng Be Vietnam Pro, giọng edge-tts, hiện trong `/web/review`. Các bước cần GPU (Demucs, Whisper) và LLM vẫn là dữ liệu mẫu
+- [x] **G0.4** Không dùng VideoLingo nữa (D23). **`make smoke` chạy toàn chuỗi ra video thật trên GPU**: Demucs tách stem thật, gióng phụ đề bằng word timestamp của `large-v3` (khớp 0,95), reframe blur 1280×720 → 720×1280, trộn có ducking ở −20 dB, burn phụ đề Be Vietnam Pro, `loudnorm`. Còn giả đúng hai chỗ: bước tải (dùng `lavfi`) và hai bước LLM — cả hai chờ `ANTHROPIC_API_KEY` và URL nguồn có quyền
 - [ ] **G0.5** Blind test giọng: VoxCPM2 vs FPT.AI vs Viettel bằng thuật ngữ SPC/MSA thật
 - [ ] **G0.6** Clone thử giọng một kỹ sư NMI bằng VoxCPM2
 - [~] **G0.7** `make speech-rate` đo tự động. **Đo được 3,54 âm tiết/giây** với edge-tts — các nguồn trên mạng ghi 5,28–6, lệch ~40%. Còn phải đo lại với VoxCPM2
@@ -66,7 +66,7 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 
 ### G1 — Làm tay có công cụ (tuần 2–3)
 
-- [x] **G1.1** Vendor `vendor/easel/` (3 script + LICENSE + ORIGIN.md). **Không vendor VideoLingo** — xem D23
+- [x] **G1.1** Đổi khung hình và trộn audio **viết lại thành module của dự án** (`src/infrastructure/media/reframe.py`, `ffmpeg.mix_voice_over_background`), thuật toán tham khảo Easel (Apache-2.0) — khai trong `THIRD_PARTY_NOTICES.md`. **Không lấy gì từ VideoLingo** — xem D23
 - [ ] **G1.2** Làm 5 video bằng tay, **mỗi nền tảng ít nhất 1**
 - [~] **G1.3** `make corpus` + `make glossary-load`. **77 thuật ngữ EN đã nạp** từ corpus thật (PLC 107×, MES 63×, SPC 42×, Gage R&R 22×, Cpk 15×, OPC UA 14×) — tất cả là *giữ nguyên tiếng Anh*. Còn thiếu: cặp có bản tiếng Việt, và chiều ZH↔VI
 - [ ] **G1.4** Ghi lại thời gian thật mỗi video theo nền tảng và ngôn ngữ nguồn
@@ -226,6 +226,7 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D52 | Pin **`ctranslate2==4.8.2`** (>= 4.5), không để faster-whisper tự chọn | Bản 4.4.0 link với **cuDNN 8**, còn base image CUDA 12.4 và torch 2.6 đều mang **cuDNN 9** — không có cuDNN 8 ở đâu. CTranslate2 không nạp được `libcudnn_ops_infer.so.8` và **ABORT cứng cả tiến trình** (`Fatal Python error: Aborted`), không ném exception nên không handler nào bắt được. Nghĩa là **đường ASR trên GPU chưa từng chạy được một lần** — chỉ lộ ra khi chạy test GPU thật |
 | D53 | **Bỏ WhisperX hoàn toàn**, dùng `faster-whisper` trực tiếp | `whisperx 3.3.1` khoá `ctranslate2<4.5` (cuDNN 8) nên không chạy được trên base cuDNN 9; `whisperx 3.8.6` cho phép ctranslate2 mới nhưng đòi `torch~=2.8`, tức một lần di trú nữa cho thứ **ta không còn cần**: phần giá trị nhất của nó là forced alignment, đã bị thay vì license (D49). Phần còn lại — gom batch và VAD — `faster-whisper` có sẵn. Kết quả: **một** đường ASR duy nhất cho cả nhận dạng lời nguồn và mốc thời gian phụ đề |
 | D54 | **Không model nào được giữ trên card qua ranh giới lời gọi** — nạp trong hàm, nhả trong `finally` | Đảo lại thiết kế cũ của `voxcpm.py` (giữ model ở biến module-level cho suốt vòng đời tiến trình). Đo bằng `make measure-load` trên RTX 3070: VoxCPM2 giữ **5,12 GB** làm VRAM rảnh về **0,00/8,0 GB** — việc kế tiếp không nạp nổi Whisper (~3,5 GB). Lý do giữ model là để tránh 120,9 s nạp, nhưng nạp **lại** chỉ mất **31,9 s**: 89 s chênh là biên dịch kernel, trả một lần mỗi tiến trình. Đổi 32 s mỗi việc để không bao giờ `CUDA out of memory` là đổi đáng, nhất là khi mỗi video còn qua 20–35 phút người soát. Hàm nhả chuyển về `src/shared/gpu.py` để ba adapter dùng chung thay vì ba bản copy |
+| D55 | **Bỏ hẳn khái niệm `vendor/`** — code mượn từ dự án mở được viết lại thành module của chính dự án | Quy tắc cũ ("sao nguyên byte, không được sửa, chỉ bọc adapter") nghe thì an toàn nhưng vừa trả giá thật: graph trộn audio của Easel thiếu `aformat` trước `sidechaincompress` nên đổ ngay khi bật ducking, mà luật cấm sửa lại đẩy chỗ chữa ra xa chỗ hỏng. Thêm nữa, adapter phải gọi script qua `subprocess`, nên lỗi về dưới dạng **tiếng Trung trên stderr** — không phân loại được retry được hay không, đúng thứ hàng đợi việc cần. Nay: đọc upstream, hiểu thuật toán, **viết lại** trong `src/` và sửa tự do. Nghĩa vụ Apache-2.0 chuyển sang `THIRD_PARTY_NOTICES.md` — ghi lấy gì, đưa vào đâu, **sửa những gì**, kèm toàn văn license. Bỏ luôn `subtitle_ops.py` (569 dòng chưa hề dùng) |
 
 ---
 

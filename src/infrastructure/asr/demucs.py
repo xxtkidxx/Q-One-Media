@@ -8,7 +8,7 @@ lồng giọng Việt lên thì video nghe như slideshow (đặc tả F2.4).
 Tham số ``htdemucs`` với ``shifts=1, overlap=0.25`` và cách **cộng mọi stem không
 phải giọng** để làm nền là ý mượn từ ``core/asr_backend/demucs_vl.py`` của
 VideoLingo (Apache-2.0). Code ở đây viết lại trên API ``demucs`` trực tiếp, không
-vendor — lý do ghi trong ``vendor/README.md`` (D23).
+vendor — xem D23 trong ``PLAN.md``.
 """
 
 from __future__ import annotations

@@ -1,3 +1,63 @@
+# Thông báo bên thứ ba
+
+Dự án này có mã nguồn viết lại từ phần mềm mã nguồn mở. File này là **nghĩa vụ
+license**, không phải tài liệu tham khảo: Apache-2.0 yêu cầu giữ thông báo bản quyền
+và **nêu rõ những chỗ đã sửa**.
+
+Không còn thư mục `vendor/`. Code tham khảo đã được **viết lại thành module của chính
+dự án**, đặt cùng chỗ với phần còn lại trong `src/`, và được sửa tự do như mọi code
+khác. Đổi lại, mỗi chỗ như vậy phải khai ở đây và ghi xuất xứ ngay trong docstring của
+module.
+
+---
+
+## Easel
+
+| | |
+|---|---|
+| Repo | https://github.com/ZJU-REAL/Easel |
+| Commit tham khảo | `16f068e4a5c147712d01ae6601765e42edaaf6e8` |
+| Ngày lấy | 2026-09-13 |
+| License | Apache License 2.0 (toàn văn ở cuối file này) |
+
+### Đã dùng những gì, và sửa gì
+
+**`skills/shared/scripts/reframe.py` → [`src/infrastructure/media/reframe.py`](src/infrastructure/media/reframe.py)**
+
+Lấy thuật toán *blur fill* (nền là chính khung hình, phóng to cho đầy rồi làm mờ,
+khung gốc đặt giữa) và *focus crop*. Đã sửa:
+
+- viết lại thành hàm Python gọi trực tiếp, bỏ lớp CLI `argparse` và `sys.exit`;
+- lỗi ném ra `ReframeFailed` thay vì in tiếng Trung rồi thoát — hàng đợi việc cần
+  phân biệt được lỗi retry được hay không;
+- bỏ chế độ `smart` (dò khuôn mặt bằng `cv2`): nội dung của dự án là dây chuyền, HMI,
+  screen recording, hiếm khi có mặt người. Gọi `smart` giờ ném lỗi rõ ràng chứ không
+  lặng lẽ rơi về `blur`;
+- giới hạn tỷ lệ trong một danh sách đóng.
+
+**`skills/shared/scripts/audio_mix.py` → `mix_voice_over_background()` trong
+[`src/infrastructure/media/ffmpeg.py`](src/infrastructure/media/ffmpeg.py)**
+
+Lấy cách trộn giọng lên nền có sidechain ducking. Đã sửa:
+
+- **sửa một lỗi thật của bản gốc:** graph thiếu `aformat` trước `sidechaincompress`,
+  nên với ffmpeg 4.4 nó đổ bằng *"could not choose their formats"* ngay khi bật
+  ducking. Đã dựng lại lỗi với mọi tổ hợp đầu vào (mono/stereo, wav/flac, layout khai
+  báo đầy đủ) — nguyên nhân nằm ở graph, không nằm ở file;
+- âm lượng nhận thẳng **dB** thay vì hệ số tuyến tính. Bản gốc nhận hệ số và mặc định
+  `0.25` ≈ −12 dB, to hơn mức đặc tả F2.4 yêu cầu (−18…−22 dB) khoảng 10 dB;
+- độ dài đầu ra lấy theo giọng bằng `duration=first` thay vì tự tính rồi `-t`;
+- bỏ phần sfx và bgm loop — dự án này không dùng.
+
+**`skills/shared/scripts/subtitle_ops.py` — không dùng.** Phụ đề ASS do
+`src/infrastructure/media/ffmpeg.py` tự dựng, vì style phải bám nhận diện NMI và phải
+kiểm được font có đủ dấu tiếng Việt hay không.
+
+---
+
+## Toàn văn Apache License 2.0
+
+```
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -199,3 +259,4 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+```

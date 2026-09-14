@@ -83,7 +83,6 @@ services:
     # lỗi chính tả.
     volumes:
       - ../src:/app/src
-      - ../vendor:/app/vendor
       - ../tests:/app/tests
       - ../scripts:/app/scripts:ro
       - ../research:/app/research:ro
@@ -120,7 +119,6 @@ services:
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
     volumes:
       - ../src:/app/src
-      - ../vendor:/app/vendor
       - ../tests:/app/tests
       - ../scripts:/app/scripts:ro
       - ../research:/app/research:ro

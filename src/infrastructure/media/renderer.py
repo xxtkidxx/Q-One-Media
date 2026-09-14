@@ -22,7 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.domain.production.value_objects import PORTRAIT_9_16, AspectRatio, ReframeMode
-from src.infrastructure.media import easel, ffmpeg
+from src.infrastructure.media import ffmpeg
+from src.infrastructure.media.reframe import reframe as reframe_video
 from src.shared.logging import get_logger
 
 log = get_logger(__name__)
@@ -53,7 +54,7 @@ class RenderFailed(RuntimeError):
 
 
 class FfmpegRenderer:
-    """Hiện thực cụ thể. Chỉ dùng ffmpeg và script Easel đã vendor."""
+    """Hiện thực cụ thể. Chỉ dùng ffmpeg."""
 
     def render(self, req: RenderRequest) -> Path:
         req.work_dir.mkdir(parents=True, exist_ok=True)
@@ -74,13 +75,13 @@ class FfmpegRenderer:
             log.info("render.reframe.skipped", aspect=str(aspect))
             framed = clip
         else:
-            framed = easel.reframe(
+            framed = reframe_video(
                 clip, req.work_dir / "framed.mp4", ratio="9:16", mode=ReframeMode.BLUR
             )
 
         # 3. Trộn audio: giọng Việt lên nền tiếng máy
         if req.background_audio is not None and req.background_audio.exists():
-            mixed_audio = easel.mix_voice_over_background(
+            mixed_audio = ffmpeg.mix_voice_over_background(
                 req.voice_audio, req.background_audio, req.work_dir / "mixed.wav"
             )
         else:

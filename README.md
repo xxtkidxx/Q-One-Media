@@ -82,14 +82,14 @@ Clean Architecture — mũi tên phụ thuộc luôn chỉ vào trong. Chi tiế
 ```
 AGENTS.md · CLAUDE.md     hướng dẫn agent (CLAUDE.md chỉ là con trỏ)
 PLAN.md                   kế hoạch + hiện trạng
+THIRD_PARTY_NOTICES.md    code mượn từ dự án mở: lấy gì, sửa gì (nghĩa vụ license)
 docs/                     đặc tả duy nhất
 docker/                   Dockerfile + 2 file compose độc lập (dev, prod) + init SQL
 src/domain/               nghiệp vụ thuần, chỉ stdlib — license gate sống ở đây
 src/application/          use case + port
-src/infrastructure/       adapter: Postgres, yt-dlp, (tts/publish/media: chưa có)
+src/infrastructure/       adapter: Postgres, yt-dlp, ASR/TTS, media (ffmpeg), publish
 src/interfaces/           FastAPI + worker
 src/shared/               config, paths, logging
-vendor/                   code bên thứ ba đã vendor, kèm ORIGIN.md
 tests/unit/               không network/GPU/DB, chạy < 1s · tests/integration/ cần container
 research/nmi-scan/        corpus song ngữ nmi.vn → rút glossary thuật ngữ
 data/                     runtime, gitignored

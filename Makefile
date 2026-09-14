@@ -96,8 +96,10 @@ psql:
 
 # Chạy toàn chuỗi một lần, không cần GPU, ra một video thật trong trang duyệt.
 # Bước tải/Demucs/WhisperX/LLM được thay bằng dữ liệu mẫu — script nói rõ cái nào.
+# Chay trong worker chu khong phai api: worker co GPU nen Demucs va buoc giong
+# chay THAT. Script tu nhan dien — khong co GPU thi no bao ro va dung du lieu mau.
 smoke:
-	$(DC) $(DEV) run --rm api python scripts/smoke_pipeline.py
+	$(DC) $(DEV) run --rm worker python scripts/smoke_pipeline.py
 
 # Corpus nmi.vn → bảng thuật ngữ (G1.3). nmi.vn là site của chính NMI, có mặt ở
 # đây vì taxonomy và vì cách NMI đã gọi thuật ngữ bằng tiếng Việt — không phải

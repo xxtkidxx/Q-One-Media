@@ -129,7 +129,6 @@ CMD ["python", "-m", "src.interfaces.worker.main"]
 FROM base AS prod
 COPY src/ /app/src/
 COPY scripts/ /app/scripts/
-COPY vendor/ /app/vendor/
 RUN useradd -m -u 10001 qone && chown -R qone:qone /app
 USER qone
 CMD ["python", "-m", "src.interfaces.worker.main"]

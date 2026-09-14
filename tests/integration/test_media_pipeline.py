@@ -16,12 +16,12 @@ from pathlib import Path
 import pytest
 
 from src.infrastructure.media import ffmpeg
-from src.infrastructure.media.easel import VENDOR_EASEL, reframe
 from src.infrastructure.media.ffmpeg import (
     VIETNAMESE_GLYPH_PROBE,
     GlyphMissing,
     build_ass,
 )
+from src.infrastructure.media.reframe import reframe
 
 pytestmark = pytest.mark.integration
 
@@ -170,12 +170,9 @@ def test_loudnorm_chay_va_giu_hinh(landscape_video, tmp_path):
     assert (info.width, info.height) == (1280, 720)
 
 
-# ---------------- Reframe qua script Easel đã vendor ----------------
+# ---------------- Đổi khung hình ----------------
 
 
-@pytest.mark.skipif(
-    not (VENDOR_EASEL / "reframe.py").exists(), reason="chưa vendor Easel"
-)
 @skip_no_ffmpeg
 def test_reframe_blur_dua_16_9_ve_9_16_khong_cat_hinh(landscape_video, tmp_path):
     """Chế độ ``blur`` giữ nguyên toàn bộ khung gốc, chỉ thêm nền mờ hai đầu.
@@ -191,9 +188,6 @@ def test_reframe_blur_dua_16_9_ve_9_16_khong_cat_hinh(landscape_video, tmp_path)
 # ---------------- Toàn chuỗi render ----------------
 
 
-@pytest.mark.skipif(
-    not (VENDOR_EASEL / "reframe.py").exists(), reason="chưa vendor Easel"
-)
 @skip_no_ffmpeg
 def test_render_toan_chuoi_ra_video_doc_co_phu_de(landscape_video, tmp_path):
     """Cắt → reframe blur → trộn audio → burn phụ đề → loudnorm, bằng ffmpeg thật."""

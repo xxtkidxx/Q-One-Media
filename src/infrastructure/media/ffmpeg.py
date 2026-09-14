@@ -201,6 +201,116 @@ def mux(video: Path, audio: Path, dest: Path) -> Path:
     return dest
 
 
+# Nền tiếng máy ở −20 dB: giữa khoảng −18…−22 dB của đặc tả F2.4.
+BACKGROUND_DB = -20.0
+
+# Sidechain ducking: nền tụt xuống khi có tiếng nói, trả lại khi ngừng. Ngưỡng và
+# thời hằng lấy theo mặc định của Easel (đã nghe được với nội dung công nghiệp);
+# `release` dài hơn `attack` nhiều lần là có ý — nền dâng lại nhanh quá thì nghe
+# như đang "thở".
+DUCK_THRESHOLD = 0.03
+DUCK_RATIO = 8
+DUCK_ATTACK_MS = 20
+DUCK_RELEASE_MS = 300
+
+# Chốt định dạng giữa chừng filtergraph. Đây **không** phải dòng thừa: `aresample`
+# đổi được tần số nhưng không chốt channel layout, và `sidechaincompress` của
+# ffmpeg 4.4 không tự thương lượng được format qua `asplit` — nó đổ bằng
+# "No channel layout for input 1" / "could not choose their formats" rồi hỏng cả
+# lần chạy. Đã dựng lại lỗi này với mọi tổ hợp đầu vào (mono/stereo, wav/flac,
+# layout khai báo đầy đủ) — chỉ `aformat` ngay trước sidechain mới chữa được, nên
+# nguyên nhân nằm ở graph chứ không nằm ở file.
+_AFORMAT = "aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=stereo"
+
+# Nền tắt dần ở cuối để không bị cắt cụt. Trần 1,5 s, và không dài quá 1/4 video
+# vì với clip ngắn thì fade dài nghe như lỗi.
+_FADE_MAX_SEC = 1.5
+
+
+def mix_voice_over_background(
+    voice: Path,
+    background: Path,
+    dest: Path,
+    *,
+    background_db: float = BACKGROUND_DB,
+    voice_db: float = 0.0,
+    duck: bool = True,
+) -> Path:
+    """Lồng giọng Việt lên nền tiếng máy, có sidechain ducking.
+
+    ``background`` là stem **không phải giọng** do Demucs tách ra — tiếng máy chạy,
+    tiếng bíp HMI. Giữ lại vì âm thanh đó *mang thông tin* và làm video đáng tin với
+    khán giả kỹ thuật; xoá sạch thì video nghe như slideshow (F2.4).
+
+    Độ dài đầu ra theo ``voice`` — đúng thứ cần, vì giọng Việt là trục thời gian của
+    video thành phẩm.
+
+    Graph ở đây viết lại từ ``skills/shared/scripts/audio_mix.py`` của **Easel**
+    (Apache-2.0 — xem ``THIRD_PARTY_NOTICES.md``), **có sửa một lỗi**: bản gốc thiếu
+    ``aformat`` trước ``sidechaincompress`` nên đổ ngay khi bật ducking với đầu vào
+    của dự án này (giọng mono 24 kHz từ TTS + nền stereo 44,1 kHz từ Demucs). Hai
+    khác biệt nữa so với bản gốc:
+
+    * âm lượng nhận thẳng **dB** (``volume=-20dB``) thay vì hệ số tuyến tính — bản
+      gốc nhận hệ số, và mặc định ``0.25`` của nó ≈ −12 dB, to hơn mức F2.4 yêu cầu
+      khoảng 10 dB. Nhận dB thì không còn chỗ cho nhầm đơn vị;
+    * độ dài lấy theo giọng bằng ``duration=first``, không phải tự tính rồi ``-t``.
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    voice_len = probe(voice).duration_sec
+    fade = min(_FADE_MAX_SEC, voice_len / 4) if voice_len > 0 else 0.0
+
+    # Giọng: chốt format NGAY, vì nhánh này vừa đi ra bản trộn vừa làm tín hiệu
+    # điều khiển sidechain — hai nhánh phải cùng định dạng.
+    graph = [
+        f"[0:a]volume={voice_db}dB,aresample=44100,{_AFORMAT}[voice]",
+        f"[1:a]volume={background_db}dB,aresample=44100,{_AFORMAT}[bg0]",
+    ]
+    if duck:
+        graph += [
+            "[voice]asplit=2[voice_out][voice_sc]",
+            f"[bg0][voice_sc]sidechaincompress=threshold={DUCK_THRESHOLD}"
+            f":ratio={DUCK_RATIO}:attack={DUCK_ATTACK_MS}:release={DUCK_RELEASE_MS}[bg]",
+        ]
+        voice_label = "[voice_out]"
+    else:
+        graph.append("[bg0]anull[bg]")
+        voice_label = "[voice]"
+
+    # duration=first: đầu vào đầu tiên là giọng, nên nền bị cắt theo giọng chứ không
+    # kéo dài video ra. normalize=0: amix mặc định chia đều biên độ cho số nhánh, tức
+    # tự ý hạ giọng 6 dB — mà mức của hai nhánh đã đặt bằng dB ở trên rồi.
+    graph.append(
+        f"{voice_label}[bg]amix=inputs=2:duration=first:normalize=0"
+        ":dropout_transition=0[mixed]"
+    )
+    if fade > 0:
+        graph.append(
+            f"[mixed]afade=t=out:st={max(0.0, voice_len - fade):.3f}:d={fade:.3f}[out]"
+        )
+    else:
+        graph.append("[mixed]anull[out]")
+
+    log.info(
+        "ffmpeg.mix",
+        voice_sec=round(voice_len, 2),
+        background_db=background_db,
+        duck=duck,
+    )
+    run(
+        [
+            "-i", str(voice),
+            "-i", str(background),
+            "-filter_complex", ";".join(graph),
+            "-map", "[out]",
+            "-c:a", "pcm_s16le",
+            str(dest),
+        ]
+    )
+    return dest
+
+
 def _escape_filter_path(path: Path) -> str:
     """``:`` và ``\\`` là ký tự cú pháp của filtergraph, phải escape."""
     return str(path).replace("\\", "/").replace(":", r"\:")

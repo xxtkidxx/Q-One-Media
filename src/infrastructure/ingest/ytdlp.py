@@ -1,6 +1,6 @@
 """Adapter yt-dlp: đọc metadata và tải video.
 
-**Vì sao tự viết thay vì vendor ``core/_1_ytdlp.py`` của VideoLingo** — đọc code
+**Vì sao tự viết thay vì mượn ``core/_1_ytdlp.py`` của VideoLingo** — đọc code
 upstream rồi mới quyết định, và có ba lý do cụ thể:
 
 1. Hàm ``update_ytdlp()`` của họ chạy ``pip install --upgrade yt-dlp`` **mỗi

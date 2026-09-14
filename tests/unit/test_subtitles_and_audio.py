@@ -1,15 +1,17 @@
-"""Phần thuần tính toán của tầng media: ASS và đổi đơn vị âm lượng.
+"""Phần thuần tính toán của tầng media: dựng ASS và mức âm lượng.
 
-Không cần ffmpeg — đây đúng là những chỗ sai mà mắt không thấy: một
-centisecond lệch, hoặc dB hiểu thành hệ số tuyến tính.
+Không cần ffmpeg — đây đúng là loại lỗi mắt không thấy: một centisecond
+lệch, hoặc nền tiếng máy đặt sai mức vài dB.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from src.infrastructure.media.easel import DEFAULT_BACKGROUND_DB, db_to_linear
 from src.infrastructure.media.ffmpeg import (
+    BACKGROUND_DB,
+    DUCK_ATTACK_MS,
+    DUCK_RELEASE_MS,
     VIETNAMESE_GLYPH_PROBE,
     _ass_timestamp,
     build_ass,
@@ -77,26 +79,18 @@ def test_ass_bo_cue_rong():
     assert len([ln for ln in out.splitlines() if ln.startswith("Dialogue")]) == 1
 
 
-# ---------------- dB sang hệ số tuyến tính ----------------
-
-
-def test_db_sang_he_so_tuyen_tinh():
-    assert db_to_linear(0.0) == 1.0
-    assert db_to_linear(-6.0) == pytest.approx(0.5, abs=0.005)
-    assert db_to_linear(-20.0) == pytest.approx(0.1, abs=0.001)
+# ---------------- Mức âm lượng và ducking ----------------
 
 
 def test_nen_mac_dinh_nam_trong_khoang_dac_ta_yeu_cau():
-    """F2.4: nền tiếng máy ở −18…−22 dB."""
-    assert -22.0 <= DEFAULT_BACKGROUND_DB <= -18.0
+    """F2.4: nền tiếng máy ở −18…−22 dB — đủ nghe là máy thật, không át giọng."""
+    assert -22.0 <= BACKGROUND_DB <= -18.0
 
 
-def test_mac_dinh_cua_easel_to_hon_muc_dac_ta_yeu_cau():
-    """Ghi lại bằng test cái bẫy đã phát hiện khi đọc source Easel.
+def test_ducking_nha_cham_hon_bat_nhieu_lan():
+    """`release` phải dài hơn `attack` nhiều lần.
 
-    ``--bgm-volume`` mặc định 0.25 của upstream ≈ −12 dB. Nếu ai đó sửa adapter
-    cho "đơn giản" bằng cách bỏ hàm đổi đơn vị, test này đỏ.
+    Nền dâng lại ngay sau mỗi khoảng ngắt giữa câu thì nghe như đang "thở" — đó là
+    lỗi ai cũng nghe ra nhưng không ai chỉ được tên, nên chốt bằng test.
     """
-    upstream_default = 0.25
-    ours = db_to_linear(DEFAULT_BACKGROUND_DB)
-    assert ours < upstream_default / 2
+    assert DUCK_RELEASE_MS >= DUCK_ATTACK_MS * 5
