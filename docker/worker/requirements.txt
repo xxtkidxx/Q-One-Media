@@ -9,6 +9,13 @@ yt-dlp==2026.8.19
 # Dùng cho 2 việc: transcript nguồn, và căn phụ đề Việt theo audio TTS.
 whisperx==3.3.1
 faster-whisper==1.1.0
+# ctranslate2 >= 4.5 la BAT BUOC, khong phai chon ban moi cho vui.
+# Ban 4.4.0 link voi cuDNN 8, con base image CUDA 12.4 va torch 2.6 deu mang
+# cuDNN 9 - khong co cuDNN 8 o dau. Hau qua: CTranslate2 khong nap duoc
+# libcudnn_ops_infer.so.8 va ABORT cung ca tien trinh (Fatal Python error:
+# Aborted), khong phai nem exception. Nghia la duong ASR tren GPU khong chay duoc
+# mot lan nao. faster-whisper 1.1.0 cho phep ctranslate2 <5 nen 4.8.x hop le.
+ctranslate2==4.8.2
 
 # --- Tách giọng khỏi tiếng máy ---
 # Bỏ stem giọng gốc, GIỮ stem tiếng máy làm nền (mục F2.4).
