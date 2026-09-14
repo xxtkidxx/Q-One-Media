@@ -1,16 +1,13 @@
-"""WhisperX: nhận dạng lời nguồn, và **forced alignment cho kịch bản đã biết**.
+"""WhisperX: nhận dạng lời của audio nguồn.
 
-Hai việc dùng cùng một thư viện nhưng khác nhau về bản chất, và lẫn chúng là một
-lỗi tốn kém:
+``transcribe()`` — audio nguồn tiếng Anh/Trung → chữ. Ở đây máy *đoán* chữ, nên có
+tỷ lệ sai: tiếng Anh sạch ~93–95% đúng, tiếng Trung ~12,8% CER (F2.8). Vì vậy
+Giai đoạn 1 bắt buộc có người soát transcript.
 
-- ``transcribe()`` — audio nguồn tiếng Anh/Trung → chữ. Ở đây máy *đoán* chữ, nên
-  có tỷ lệ sai: tiếng Anh sạch ~93–95% đúng, tiếng Trung ~12,8% CER (F2.8). Vì
-  vậy Giai đoạn 1 bắt buộc có người soát transcript.
-- ``align_known_text()`` — audio TTS + **kịch bản mình vừa viết** → timestamp cấp
-  từ. Ở đây chữ là **đầu vào**, không phải đầu ra, nên **không thể sai chữ**.
-
-Đừng bao giờ chạy ASR trên audio TTS vừa tạo để lấy phụ đề: đó là tự tạo lỗi
-nhận dạng từ một văn bản đã hoàn hảo (F2.5).
+**Việc gióng kịch bản đã biết với audio TTS không ở đây** — nó ở
+``src/infrastructure/asr/align.py``. Lý do tách ra và lý do không dùng forced
+alignment của WhisperX (license cc-by-nc-4.0 và model thiếu CTC head) ghi trong
+docstring của file đó.
 """
 
 from __future__ import annotations
@@ -148,6 +145,7 @@ def transcribe(
     _allow_checkpoint_globals()
     device, compute_type = _device_and_compute()
     log.info("whisperx.transcribe.start", language=language, model=model_name, device=device)
+    model = None
     try:
         asr_options = {"initial_prompt": initial_prompt} if initial_prompt else None
         model = whisperx.load_model(
@@ -158,68 +156,18 @@ def transcribe(
     except Exception as exc:
         raise AsrFailed(f"WhisperX transcribe thất bại: {type(exc).__name__}: {exc}") from exc
     finally:
+        # Xoá object model TRƯỚC khi gọi _free_vram(). Đo thực tế trên RTX 3070:
+        # trong lúc large-v3 float16 chạy, VRAM rảnh về **0,00/8,0 GB**. CTranslate2
+        # (nền của faster-whisper) cấp bộ nhớ **ngoài** allocator của PyTorch, nên
+        # torch.cuda.empty_cache() một mình không giải phóng được gì — chỉ khi object
+        # model bị giải phóng thì CTranslate2 mới nhả.
+        del model
         _free_vram()
 
     segments = list(result.get("segments") or [])
     text = " ".join(str(s.get("text", "")).strip() for s in segments).strip()
     log.info("whisperx.transcribe.done", segments=len(segments), chars=len(text))
     return Transcript(language=result.get("language", language), text=text, segments=segments)
-
-
-def align_known_text(
-    audio: Path,
-    text: str,
-    *,
-    language: str = "vi",
-) -> list[Word]:
-    """Gióng **chữ đã biết** với audio, trả timestamp cấp từ.
-
-    Chữ là đầu vào nên nội dung phụ đề không thể sai — chỉ có timing mới cần đo.
-    Đây là lý do bước này thay cho việc ASR lại audio TTS.
-    """
-    try:
-        import whisperx
-    except ImportError as exc:
-        raise WhisperUnavailable("chưa cài whisperx — chỉ có trong image worker") from exc
-
-    if not text.strip():
-        raise AsrFailed("không gióng được chuỗi rỗng")
-
-    _allow_checkpoint_globals()
-    device, _ = _device_and_compute()
-    log.info("whisperx.align.start", language=language, chars=len(text))
-    try:
-        audio_data = whisperx.load_audio(str(audio))
-        duration = len(audio_data) / 16000.0
-        model_a, metadata = whisperx.load_align_model(language_code=language, device=device)
-        # Một segment phủ toàn bộ audio: ta không chia trước, để aligner tự tìm
-        # vị trí từng từ trong cả đoạn.
-        result = whisperx.align(
-            [{"text": text.strip(), "start": 0.0, "end": duration}],
-            model_a,
-            metadata,
-            audio_data,
-            device,
-            return_char_alignments=False,
-        )
-    except Exception as exc:
-        raise AsrFailed(f"forced alignment thất bại: {type(exc).__name__}: {exc}") from exc
-    finally:
-        _free_vram()
-
-    words: list[Word] = []
-    for seg in result.get("segments") or []:
-        for w in seg.get("words") or []:
-            token = str(w.get("word", "")).strip()
-            start, end = w.get("start"), w.get("end")
-            if not token or start is None or end is None:
-                # Aligner bỏ trống timestamp ở từ nó không gióng được (thường là
-                # số hoặc từ nước ngoài). Bỏ từ đó khỏi timing chứ không đoán —
-                # đoán sẽ làm lệch mọi từ sau nó.
-                continue
-            words.append(Word(text=token, start=float(start), end=float(end)))
-    log.info("whisperx.align.done", words=len(words))
-    return words
 
 
 def group_words_into_cues(

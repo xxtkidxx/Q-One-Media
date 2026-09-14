@@ -227,7 +227,8 @@ def handle_align(job: Job, uow: UnitOfWork, settings: Settings) -> None:
     """Forced alignment: kịch bản đã biết ↔ audio TTS → timing phụ đề."""
     import json
 
-    from src.infrastructure.asr.whisperx import align_known_text, group_words_into_cues
+    from src.infrastructure.asr.align import align_known_text
+    from src.infrastructure.asr.whisperx import group_words_into_cues
 
     item_id = _need_item(job)
     with uow:

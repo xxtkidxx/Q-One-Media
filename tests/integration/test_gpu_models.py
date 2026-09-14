@@ -150,7 +150,7 @@ def test_whisperx_truyen_language_tuong_minh(speech_audio):
     assert transcribe(speech_audio, language="vi").language == "vi"
 
 
-# ---------------- WhisperX: forced alignment ----------------
+# ---------------- Gióng kịch bản đã biết (Whisper word timestamp) ----------------
 
 
 def test_forced_alignment_giu_nguyen_chu_da_biet(speech_audio):
@@ -158,7 +158,8 @@ def test_forced_alignment_giu_nguyen_chu_da_biet(speech_audio):
 
     Chỉ timing mới cần đo. Đây là lý do không ASR lại audio TTS.
     """
-    from src.infrastructure.asr.whisperx import align_known_text, group_words_into_cues
+    from src.infrastructure.asr.align import align_known_text
+    from src.infrastructure.asr.whisperx import group_words_into_cues
 
     known = (
         "Biểu đồ kiểm soát cho thấy trung bình quá trình trôi dần theo ca. "
@@ -179,7 +180,7 @@ def test_forced_alignment_giu_nguyen_chu_da_biet(speech_audio):
 
 
 def test_alignment_nam_trong_do_dai_audio(speech_audio):
-    from src.infrastructure.asr.whisperx import align_known_text
+    from src.infrastructure.asr.align import align_known_text
     from src.infrastructure.media import ffmpeg
 
     duration = ffmpeg.probe(speech_audio).duration_sec
@@ -242,8 +243,9 @@ def test_ba_model_chay_tuan_tu_khong_het_vram(speech_audio, tmp_path):
     ai bỏ ``_free_vram()`` thì nó đỏ ở đây, không đỏ ba tuần sau bằng một job
     thất bại lúc 2 giờ sáng.
     """
+    from src.infrastructure.asr.align import align_known_text
     from src.infrastructure.asr.demucs import separate
-    from src.infrastructure.asr.whisperx import align_known_text, transcribe
+    from src.infrastructure.asr.whisperx import transcribe
     from src.infrastructure.tts.voxcpm import VoxCpmSynthesizer
 
     torch = _torch()

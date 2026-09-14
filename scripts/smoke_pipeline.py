@@ -247,8 +247,9 @@ def main() -> int:
         voice_path = settings.paths.absolute(uow.items.get(item_id).path_work.relative_path)
 
     if has_gpu:
-        _say("7/8  Forced alignment bằng WhisperX (THẬT) — kịch bản đã biết ↔ audio TTS …")
-        from src.infrastructure.asr.whisperx import align_known_text, group_words_into_cues
+        _say("7/8  Gióng kịch bản đã biết với audio TTS bằng word timestamp của Whisper …")
+        from src.infrastructure.asr.align import align_known_text
+        from src.infrastructure.asr.whisperx import group_words_into_cues
 
         words = align_known_text(voice_path, SCRIPT_VI, language="vi")
         cues = group_words_into_cues(words)
