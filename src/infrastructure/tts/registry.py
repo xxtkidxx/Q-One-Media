@@ -11,6 +11,57 @@ from pathlib import Path
 
 from src.application.ports import SpeechSynthesizer
 from src.shared.config import ConfigError, Settings
+from src.shared.logging import get_logger
+
+log = get_logger(__name__)
+
+
+def build_synthesizer_for(voice_id: str | None, settings: Settings) -> SpeechSynthesizer:
+    """Dựng engine theo **giọng người dùng chọn cho video này**.
+
+    Không có lựa chọn thì rơi về ``TTS_ENGINE`` như trước. Giọng không còn dùng
+    được (mất file mẫu, rút FPT.AI key, chọn edge rồi chạy prod) cũng rơi về mặc
+    định kèm log — dừng cả video vì một lựa chọn giọng là đổi cái nhỏ lấy cái lớn.
+    """
+    from src.infrastructure.tts.catalog import find_voice
+
+    option = find_voice(voice_id, settings)
+    if option is None or not option.available:
+        if voice_id:
+            log.warning(
+                "tts.voice.fallback",
+                wanted=voice_id,
+                reason="không còn trong danh mục hoặc chưa cấu hình",
+            )
+        return build_synthesizer(settings)
+
+    if option.engine == "voxcpm":
+        from src.infrastructure.tts.voxcpm import VoxCpmSynthesizer
+
+        return VoxCpmSynthesizer(
+            default_voice_ref=option.ref_path,
+            default_voice_ref_text=option.ref_text,
+            measured_syllables_per_sec=settings.tts.measured_rate,
+        )
+    if option.engine == "fptai":
+        from src.infrastructure.tts.fptai import FptAiSynthesizer
+
+        if not settings.tts.fptai_api_key:
+            raise ConfigError(f"giọng {option.id} cần FPTAI_API_KEY")
+        return FptAiSynthesizer(
+            api_key=settings.tts.fptai_api_key,
+            voice=option.name,
+            measured_syllables_per_sec=settings.tts.measured_rate,
+        )
+    if option.engine == "edge":
+        from src.infrastructure.tts.edge import EdgeTtsSynthesizer
+
+        if settings.is_prod:
+            raise ConfigError("giọng edge không dùng được ở production")
+        return EdgeTtsSynthesizer(
+            voice=option.name, measured_syllables_per_sec=settings.tts.measured_rate
+        )
+    raise ConfigError(f"engine của giọng {option.id} không nhận ra")
 
 
 def build_synthesizer(settings: Settings) -> SpeechSynthesizer:

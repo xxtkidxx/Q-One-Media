@@ -39,6 +39,7 @@ def create_manual_clips(
     uow: UnitOfWork,
     clock: Clock,
     actor: str,
+    voice_id: str | None = None,
 ) -> list[Item]:
     """Tạo các item con dùng chung media gốc, mỗi item là một clip độc lập."""
     if not ranges:
@@ -69,6 +70,7 @@ def create_manual_clips(
                 parent_item_id=item_id,
                 clip_index=index,
                 include_attribution=include_attribution or attribution_required,
+                voice_id=voice_id,
             )
             child.mark_downloaded(
                 path=parent.path_source,

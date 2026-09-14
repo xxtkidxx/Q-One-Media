@@ -127,6 +127,7 @@ def item_to_domain(row: ItemRow) -> Item:
         parent_item_id=row.parent_item_id,
         clip_index=row.clip_index,
         include_attribution=row.include_attribution,
+        voice_id=row.voice_id,
         review_by=row.review_by,
         review_at=row.review_at,
         review_notes=row.review_notes,
@@ -157,6 +158,7 @@ def item_apply(row: ItemRow, item: Item) -> ItemRow:
     row.parent_item_id = item.parent_item_id
     row.clip_index = item.clip_index
     row.include_attribution = item.include_attribution
+    row.voice_id = item.voice_id
     row.review_by = item.review_by
     row.review_at = item.review_at
     row.review_notes = item.review_notes

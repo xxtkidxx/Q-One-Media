@@ -944,3 +944,98 @@ def test_studio_them_canh_bieu_do_tu_so_lieu_nhap_tay(client, monkeypatch):
     )
     assert bad.status_code == 200
     assert "Nhãn = số" in bad.text
+
+
+# ---------------- Chọn giọng đọc ----------------
+
+
+def test_chon_giong_khi_tao_clip_va_o_studio(client, monkeypatch):
+    """Giọng chọn theo video, và phải đi được tới tận DB — nếu không thì worker
+    vẫn đọc bằng giọng mặc định và người dùng không hiểu vì sao."""
+    _declare(client)
+    _approve(
+        client,
+        1,
+        may_translate="true",
+        may_modify_audio="true",
+        may_subtitle="true",
+        may_republish="true",
+        may_commercial_use="true",
+    )
+    client.post(
+        "/web/items",
+        data={"url": "https://www.youtube.com/watch?v=voice01", "actor": "quan.nguyen"},
+        follow_redirects=False,
+    )
+
+    from src.application.use_cases.write_script import save_transcript
+    from src.interfaces.api.deps import get_config, get_uow
+
+    uow = get_uow()
+    with uow:
+        uow.session.execute(
+            text(
+                "UPDATE items SET stage='transcript_approved', path_source=:path, "
+                "duration_sec=180, aspect_ratio='16:9' WHERE id=1"
+            ),
+            {"path": "source/voice01.mp4"},
+        )
+        uow.commit()
+    save_transcript(
+        get_config().media_root,
+        1,
+        text="Kiểm thử giọng.",
+        segments=[{"start": 0, "end": 150, "text": "Kiểm thử giọng."}],
+    )
+
+    page = client.get("/web/review/1").text
+    assert 'name="voice_id"' in page
+    assert "VoxCPM2 — giọng mẫu mặc định" in page
+    assert "FPT.AI — Ban Mai" in page  # hiện cả giọng chưa cấu hình, kèm lý do
+    assert "Cần FPTAI_API_KEY" in page or "chưa dùng được" in page
+
+    client.post(
+        "/web/items/1/clips",
+        data={
+            "start_sec": [10],
+            "end_sec": [70],
+            "actor": "quan.nguyen",
+            "voice_id": "edge:vi-VN-NamMinhNeural",
+        },
+        follow_redirects=False,
+    )
+    with uow:
+        voice = uow.session.execute(
+            text("SELECT voice_id FROM items WHERE parent_item_id=1")
+        ).scalar_one()
+    assert voice == "edge:vi-VN-NamMinhNeural"
+    assert "Nam Minh" in client.get("/web/review/1").text
+
+    # Studio: cùng danh mục, cùng cách lưu.
+    from src.interfaces.web import routes
+
+    monkeypatch.setattr(
+        routes, "build_script_writer",
+        lambda _settings: type(
+            "W", (), {"write_from_prompt": lambda self, **kw: "Kịch bản thử."}
+        )(),
+    )
+    studio_page = client.get("/web/studio").text
+    assert 'name="voice_id"' in studio_page
+    client.post(
+        "/web/studio",
+        data={
+            "brief": "Giải thích Cpk",
+            "title": "Cpk",
+            "target_sec": "45",
+            "actor": "q",
+            "voice_id": "edge:vi-VN-HoaiMyNeural",
+        },
+        follow_redirects=False,
+    )
+    with uow:
+        studio_voice = uow.session.execute(
+            text("SELECT voice_id FROM items WHERE parent_item_id IS NULL ORDER BY id DESC LIMIT 1")
+        ).scalar_one()
+    assert studio_voice == "edge:vi-VN-HoaiMyNeural"
+    assert "Hoài My" in client.get("/web/studio").text

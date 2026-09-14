@@ -128,6 +128,7 @@ class ItemRow(Base):
     )
     clip_index: Mapped[int] = mapped_column(Integer, default=1)
     include_attribution: Mapped[bool] = mapped_column(Boolean, default=True)
+    voice_id: Mapped[str | None] = mapped_column(Text, default=None)
     item_url: Mapped[str] = mapped_column(Text, unique=True)
     external_id: Mapped[str | None] = mapped_column(Text, default=None)
     title_original: Mapped[str | None] = mapped_column(Text, default=None)

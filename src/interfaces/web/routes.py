@@ -92,6 +92,7 @@ from src.infrastructure.db.orm import AuditLogRow, ItemRow
 from src.infrastructure.db.uow import SqlUnitOfWork
 from src.infrastructure.llm.registry import build_script_writer
 from src.infrastructure.media import ffmpeg
+from src.infrastructure.tts.catalog import default_voice_id, label_for, list_voices
 from src.interfaces.api.deps import get_clock, get_config, get_uow
 from src.shared.config import Settings
 
@@ -225,7 +226,7 @@ def _default_review_tab(item, *, has_clips: bool, created: bool) -> str:
     return "transcript"
 
 
-def _clip_view(item, source_id: int) -> dict:
+def _clip_view(item, source_id: int, settings: Settings) -> dict:
     """Một dòng trong tab “Clip đã tạo” — đủ để mở popup mà không cần gọi lại server."""
     step, total, percent, step_label = _progress_detail(item.stage)
     action = NEXT_HUMAN_ACTION.get(item.stage)
@@ -240,6 +241,7 @@ def _clip_view(item, source_id: int) -> dict:
         "step_label": step_label,
         "action_label": action[0] if action else None,
         "action_kind": action[1] if action else None,
+        "voice_label": label_for(item.voice_id, settings),
         "video_url": (
             "/media/" + item.path_output.relative_path if item.path_output else None
         ),
@@ -361,6 +363,7 @@ def studio_page(request: Request, uow: Uow, config: Config):
             "stage_label": _stage_label(item.stage),
             "step": step, "total": total, "percent": percent, "step_label": label,
             "shots": plan.shots if plan else (),
+            "voice_label": label_for(item.voice_id, config),
             "video_url": (
                 "/media/" + item.path_output.relative_path if item.path_output else None
             ),
@@ -375,6 +378,8 @@ def studio_page(request: Request, uow: Uow, config: Config):
         seg_best_min=RECOMMENDED_SEGMENT_MIN_SEC,
         seg_best_max=RECOMMENDED_SEGMENT_MAX_SEC,
         image_provider=config.visuals.provider if config.visuals.enabled else None,
+        voices=list_voices(config),
+        default_voice=default_voice_id(config),
     )
 
 
@@ -388,6 +393,7 @@ def studio_create(
     title: Annotated[str, Form()] = "",
     target_sec: Annotated[float, Form()] = 60.0,
     actor: Annotated[str, Form()] = "web",
+    voice_id: Annotated[str, Form()] = "",
 ):
     try:
         with uow:
@@ -403,6 +409,7 @@ def studio_create(
             media_root=config.media_root,
             uow=uow,
             clock=clock,
+            voice_id=voice_id.strip() or None,
         )
     except (DomainError, RuntimeError, ValueError) as exc:
         return _error_page(request, "Không tạo được video", str(exc))
@@ -694,6 +701,7 @@ def create_clips_form(
     end_sec: Annotated[list[float], Form()],
     actor: Annotated[str, Form()] = "web",
     include_attribution: Annotated[bool, Form()] = False,
+    voice_id: Annotated[str, Form()] = "",
 ):
     try:
         if len(start_sec) != len(end_sec):
@@ -706,6 +714,7 @@ def create_clips_form(
             uow=uow,
             clock=clock,
             actor=actor.strip() or "web",
+            voice_id=voice_id.strip() or None,
         )
     except (DomainError, ValueError) as exc:
         return _review_error(item_id, f"Không tạo được clip: {exc}")
@@ -1140,11 +1149,11 @@ def review_detail(request: Request, item_id: int, uow: Uow, config: Config):
         _, transcript_segments = load_transcript(config.media_root, item.id or 0)
 
     source_id = item.source_id
-    clip_rows = [_clip_view(clip, source_id) for clip in clips]
+    clip_rows = [_clip_view(clip, source_id, config) for clip in clips]
     if not clips and item.path_output:
         # Item chạy thẳng hết pipeline (không cắt clip) vẫn phải có cửa duyệt —
         # nó xuất hiện như một dòng thành phẩm của chính nó.
-        clip_rows = [_clip_view(item, source_id)]
+        clip_rows = [_clip_view(item, source_id, config)]
 
     by_entity: dict[tuple[str, int], list] = {}
     for row in audits:
@@ -1194,6 +1203,8 @@ def review_detail(request: Request, item_id: int, uow: Uow, config: Config):
         seg_max=HARD_SEGMENT_MAX_SEC,
         seg_best_min=RECOMMENDED_SEGMENT_MIN_SEC,
         seg_best_max=RECOMMENDED_SEGMENT_MAX_SEC,
+        voices=list_voices(config),
+        default_voice=default_voice_id(config),
         transcript_segments=transcript_segments,
         source_video_url=(
             f"/web/items/{item.id}/source-video" if item.path_source else None

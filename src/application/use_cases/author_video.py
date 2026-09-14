@@ -119,6 +119,7 @@ def create_video_from_prompt(
     uow: UnitOfWork,
     clock: Clock,
     plan: VisualPlan | None = None,
+    voice_id: str | None = None,
 ) -> AuthoredVideo:
     """Đề bài của người dùng → kịch bản tiếng Việt → item sẵn sàng lồng tiếng."""
     from src.application.use_cases.synthesize_voice import SpeechRateUnknown
@@ -157,6 +158,7 @@ def create_video_from_prompt(
             title=title.strip() or brief.strip()[:80],
             target_sec=target_sec,
             author=clean_author,
+            voice_id=voice_id,
         )
         uow.items.add(item)
         assert item.id is not None

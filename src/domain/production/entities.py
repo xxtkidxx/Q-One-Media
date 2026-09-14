@@ -83,6 +83,8 @@ class Item:
     parent_item_id: int | None = None
     clip_index: int = 1
     include_attribution: bool = True
+    # Giọng đọc người dùng chọn cho video này; None = theo TTS_ENGINE mặc định.
+    voice_id: str | None = None
 
     review_by: str | None = None
     review_at: datetime | None = None
@@ -125,6 +127,7 @@ class Item:
         title: str,
         target_sec: float,
         author: str,
+        voice_id: str | None = None,
     ) -> Item:
         """Giai đoạn 2, đường thủ công: **người dùng tự nhập yêu cầu nội dung**.
 
@@ -152,6 +155,7 @@ class Item:
             duration_sec=int(target_sec),
             aspect_ratio=PORTRAIT_9_16,
             include_attribution=False,
+            voice_id=voice_id,
             _dubbing_cleared=True,
         )
 

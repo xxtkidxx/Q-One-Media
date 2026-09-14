@@ -65,7 +65,8 @@
   <form method="post" action="/web/items/{{ item.id }}/clips">
     <div class="clip-list" data-seg-min="{{ seg_min }}" data-seg-max="{{ seg_max }}"><div class="clip-row"><div><label>Clip 1 · Bắt đầu (giây)</label><input type="number" step="0.1" min="0" max="{{ item.duration_sec }}" name="start_sec" required></div><div><label>Kết thúc (giây)</label><input type="number" step="0.1" min="0" max="{{ item.duration_sec }}" name="end_sec" required></div><span class="clip-end"><span class="sub" data-clip-length>—</span></span></div></div>
     <button type="button" class="ghost" onclick="addClip(this)">＋ Thêm đoạn</button>
-    <div class="row"><div><label>Người quyết định</label><input name="actor" value="web" required></div></div>
+    <div class="row"><div><label>Người quyết định</label><input name="actor" value="web" required></div><div><label>Giọng đọc</label><select name="voice_id">{% for voice in voices %}<option value="{{ voice.id }}" {% if voice.id == default_voice %}selected{% endif %} {% if not voice.available %}disabled{% endif %}>{{ voice.label }}{% if voice.gender %} · {{ voice.gender }}{% endif %}{% if voice.region %} · giọng {{ voice.region }}{% endif %}{% if not voice.available %} (chưa dùng được){% endif %}</option>{% endfor %}</select></div></div>
+    <p class="sub">Giọng áp cho tất cả clip tạo trong lần này. Thả file mẫu vào <code>media/voices/</code> để thêm giọng clone VoxCPM2 — kèm file <code>.txt</code> cùng tên chứa lời đọc mẫu thì clone sát hơn.</p>
     <div class="checks"><label><input type="checkbox" name="include_attribution" value="true" {% if source and source.evidence and source.evidence.license_type.requires_attribution %}checked disabled{% endif %}> Hiện thẻ trích dẫn nguồn trong video</label></div>
     {% if source and source.evidence and source.evidence.license_type.requires_attribution %}<input type="hidden" name="include_attribution" value="true"><p class="note legal">License {{ source.evidence.license_type.value }} bắt buộc ghi nguồn nên không thể tắt.</p>{% endif %}
     <button>Tạo các clip con và chạy pipeline</button>
@@ -81,10 +82,11 @@
   <h2 style="margin-top:0">Clip đã tạo{% if is_root %} từ video gốc này{% endif %}</h2>
   {% if clips %}
   <p class="sub">Bấm vào một dòng để xem video, đọc kịch bản tiếng Việt và thực hiện bước tiếp theo.</p>
-  <div class="scroll"><table><thead><tr><th>Clip</th><th>Đoạn</th><th>Trạng thái</th><th>Tiến trình</th><th>Việc tiếp theo</th></tr></thead><tbody>
+  <div class="scroll"><table><thead><tr><th>Clip</th><th>Đoạn</th><th>Giọng</th><th>Trạng thái</th><th>Tiến trình</th><th>Việc tiếp theo</th></tr></thead><tbody>
   {% for view in clips %}{% set clip = view.item %}<tr class="clip-row-link" data-item-id="{{ clip.id }}" data-stage="{{ clip.stage.value }}" onclick="openClipDialog({{ clip.id }})">
     <td><strong>{{ view.code }}</strong></td>
     <td class="num">{% if clip.segment %}{{ clip.segment.start_sec|round(1) }}–{{ clip.segment.end_sec|round(1) }}s{% else %}—{% endif %}</td>
+    <td><span class="sub">{{ view.voice_label }}</span></td>
     <td><span class="pill {{ view.stage_value }}" data-live-stage>{{ view.stage_label }}</span></td>
     <td><span class="sub" data-live-progress-label>Bước {{ view.step }}/{{ view.total }} · {{ view.percent }}% · {{ view.step_label }}</span><div class="progress"><span data-live-progress style="width:{{ view.percent }}%"></span></div><div class="note legal" data-live-error {% if not clip.stage_error %}hidden{% endif %}>{{ clip.stage_error or '' }}</div></td>
     <td>{% if view.action_kind in ['duyet', 'publish'] %}<button type="button" onclick="event.stopPropagation();openClipDialog({{ clip.id }})">{{ view.action_label }}</button>{% elif view.action_label %}<a class="btn ghost" href="/web/review/{{ clip.id }}" onclick="event.stopPropagation()">{{ view.action_label }}</a>{% else %}<span class="sub">Đang chạy tự động</span>{% endif %}</td>

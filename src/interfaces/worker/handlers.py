@@ -201,7 +201,7 @@ def handle_write_script(job: Job, uow: UnitOfWork, settings: Settings) -> None:
 def handle_synthesize(job: Job, uow: UnitOfWork, settings: Settings) -> None:
     """Lồng tiếng. Tràn ngân sách âm tiết thì item quay về bước viết lại."""
     from src.infrastructure.media import ffmpeg
-    from src.infrastructure.tts.registry import build_synthesizer
+    from src.infrastructure.tts.registry import build_synthesizer_for
     from src.infrastructure.tts.voxcpm import count_syllables
 
     class _Probe:
@@ -209,9 +209,14 @@ def handle_synthesize(job: Job, uow: UnitOfWork, settings: Settings) -> None:
             return ffmpeg.probe(path).duration_sec
 
     item_id = _need_item(job)
+    with uow:
+        item = uow.items.get(item_id)
+        voice_id = item.voice_id if item else None
+
     outcome = synthesize_voice(
         item_id,
-        synthesizer=build_synthesizer(settings),
+        # Giọng theo lựa chọn của video này; không chọn thì rơi về TTS_ENGINE.
+        synthesizer=build_synthesizer_for(voice_id, settings),
         probe=_Probe(),
         count_syllables=count_syllables,
         media_root=settings.media_root,

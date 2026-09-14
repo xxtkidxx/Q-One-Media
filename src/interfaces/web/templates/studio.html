@@ -18,7 +18,7 @@
   <div class="item-top">
     <div>
       <h2 style="margin:0">#{{ item.id }} · {{ item.title_original or 'Chưa đặt tiêu đề' }}</h2>
-      <p class="sub">{{ item.script_sources|join(', ') }} · khung {{ item.segment.duration_sec|round(0)|int if item.segment else '?' }} giây</p>
+      <p class="sub">{{ item.script_sources|join(', ') }} · khung {{ item.segment.duration_sec|round(0)|int if item.segment else '?' }} giây · giọng: {{ row.voice_label }}</p>
     </div>
     <span class="pill {{ item.stage.value }}" data-live-stage>{{ row.stage_label }}</span>
   </div>
@@ -70,6 +70,9 @@
       <div><label>Thời lượng (giây)</label><input type="number" name="target_sec" value="60" min="{{ seg_min|round(0)|int }}" max="{{ seg_max|round(0)|int }}" step="1"></div>
       <div><label>Người tạo</label><input name="actor" value="web" required></div>
     </div>
+    <label>Giọng đọc</label>
+    <select name="voice_id">{% for voice in voices %}<option value="{{ voice.id }}" {% if voice.id == default_voice %}selected{% endif %} {% if not voice.available %}disabled{% endif %}>{{ voice.label }}{% if voice.gender %} · {{ voice.gender }}{% endif %}{% if voice.region %} · giọng {{ voice.region }}{% endif %}{% if voice.note %} — {{ voice.note }}{% endif %}</option>{% endfor %}</select>
+    <p class="sub">Thả file mẫu vào <code>media/voices/</code> để thêm giọng clone VoxCPM2; kèm file <code>.txt</code> cùng tên chứa lời đọc mẫu thì clone sát hơn.</p>
     <p class="sub">Biên cho phép {{ seg_min|round(0)|int }}–{{ seg_max|round(0)|int }} giây, tốt nhất {{ seg_best_min|round(0)|int }}–{{ seg_best_max|round(0)|int }} giây. Kịch bản được viết đúng trong ngân sách âm tiết của khung này.</p>
     <p class="note legal">Model không được bịa số liệu, tên khách hàng hay kết quả dự án. Con số cụ thể thì bạn đưa vào đề bài hoặc dựng thành cảnh biểu đồ.</p>
     <div class="actions"><button>Viết kịch bản và chạy pipeline</button><button type="button" class="ghost" onclick="document.getElementById('briefModal').close()">Hủy</button></div>
