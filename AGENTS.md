@@ -83,6 +83,7 @@ make prod-down
 
 make test              # unit test trong container dev, bỏ qua gpu/external/integration
 make test-int          # test tích hợp trên Postgres thật (cần container chạy)
+                       # Chạy trên DB riêng `<db>_test`, KHÔNG chạm DB dev
 make shell             # bash trong worker container
 ```
 
