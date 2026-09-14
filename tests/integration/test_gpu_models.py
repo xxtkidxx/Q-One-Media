@@ -16,6 +16,7 @@ Mỗi test in VRAM đỉnh để so được giữa các lần chạy.
 from __future__ import annotations
 
 import shutil
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -167,7 +168,7 @@ def test_forced_alignment_giu_nguyen_chu_da_biet(speech_audio):
     assert words, "aligner không trả về từ nào"
     assert all(w.end >= w.start for w in words)
     # Timestamp phải tăng dần: lệch thứ tự là phụ đề nhảy ngược
-    assert all(b.start >= a.start for a, b in zip(words, words[1:], strict=False))
+    assert all(b.start >= a.start for a, b in pairwise(words))
 
     cues = group_words_into_cues(words)
     assert cues

@@ -78,8 +78,9 @@ def _migrate(url: str) -> None:
     """
     from pathlib import Path
 
-    from alembic import command
     from alembic.config import Config
+
+    from alembic import command
 
     root = Path(__file__).resolve().parents[2]
     cfg = Config(str(root / "alembic.ini"))
