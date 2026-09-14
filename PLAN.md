@@ -16,7 +16,7 @@
 | Tiến độ tổng | ~75% code Giai đoạn 1; các bước cần GPU/credential chưa chạy thật |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
 | Đã kiểm chứng | **215 unit + 43 integration** test xanh, ruff sạch; **`make smoke` ra video 9:16 thật có phụ đề tiếng Việt, phát được trong `/web/review`**; 77 thuật ngữ đã nạp vào `glossary` |
-| Việc tiếp theo | **G0.10** xác nhận GPU trong Docker → thay 4 bước còn giả (Demucs, WhisperX, LLM, alignment) bằng thật. Cần bạn: URL nguồn có quyền, và `ANTHROPIC_API_KEY` |
+| Việc tiếp theo | Chạy Demucs + WhisperX + VoxCPM2 thật trên RTX 3070 8 GB, đo VRAM từng bước. Cần bạn: URL nguồn có quyền, và `ANTHROPIC_API_KEY` |
 
 ---
 
@@ -61,7 +61,7 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [~] **G0.7** `make speech-rate` đo tự động. **Đo được 3,54 âm tiết/giây** với edge-tts — các nguồn trên mạng ghi 5,28–6, lệch ~40%. Còn phải đo lại với VoxCPM2
 - [x] **G0.8** Be Vietnam Pro **đạt** với chuỗi đủ dấu, kiểm bằng libass thật. `make fonts` tải font, `check_font_covers_vietnamese()` kiểm tự động
 - [ ] **G0.9** Test `reframe.py` chế độ `blur` trên 1 video công nghiệp 16:9
-- [ ] **G0.10** Xác nhận GPU khả dụng trong Docker (`nvidia-smi` trong worker)
+- [x] **G0.10** GPU chạy trong Docker: **RTX 3070, 8 GB VRAM**, driver 595.97. 8 GB là ca chật — large-v3 (~4,7 GB) + Demucs (~2 GB) + VoxCPM2 (~5 GB) **không thể cùng ở trên card**, phải chạy tuần tự và nhả VRAM sau mỗi model (`_free_vram()`)
 - [x] **G0.11** Đúng **2 giọng** tiếng Việt: `vi-VN-HoaiMyNeural` (nữ), `vi-VN-NamMinhNeural` (nam). Đã thành engine `edge` **chỉ cho dev**
 
 ### G1 — Làm tay có công cụ (tuần 2–3)
@@ -209,6 +209,8 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D35 | Thuật ngữ rút tự động là **ứng viên cần người duyệt**, không nạp thẳng | Một thuật ngữ dịch sai đi vào **mọi** video sau đó. Script ghi ra TSV, người điền `term_vi`, rồi `make glossary-load` |
 | D36 | `research/nmi-scan/` tái lập bằng script, **không commit bundle `.js`** | Tên file chứa hash nội dung nên đổi mỗi lần nmi.vn build lại — commit vào repo là commit một thứ hết hạn |
 | D37 | Mọi biến container cần phải khai trong `x-common-env` của compose | `--env-file` chỉ thay biến trong *chính file compose*, không tự truyền vào container. Thiếu một dòng là code đọc ra `None` và một guard nổ giữa đường — đã xảy ra với `TTS_SYLLABLES_PER_SEC` |
+| D38 | **Chỉ hai file compose**, mỗi file chạy độc lập — bỏ file base | Ba file với override lồng nhau khó đọc và khó đoán: phải ghép trong đầu mới biết một service thật ra chạy với cấu hình gì. Giá phải trả là lặp phần `x-env` giữa hai file; đổi lại mỗi file đọc một lượt là hiểu hết |
+| D39 | Hardcode `dev`/`prod` trong đường dẫn thay vì `${APP_ENV}` | File đã tên là dev thì `${APP_ENV}` chỉ là một lớp gián tiếp không thêm thông tin, và là một chỗ nữa để đặt sai |
 
 ---
 

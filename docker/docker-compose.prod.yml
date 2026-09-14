@@ -1,52 +1,167 @@
-# PROD override — code nằm trong image, không mount source, restart always,
-# chỉ mở port ra 127.0.0.1 (dùng reverse proxy nếu cần ra ngoài)
-# Dùng: docker compose -f docker/docker-compose.yml -f docker/docker-compose.prod.yml --env-file .env.prod up -d
+# Q One Media — PRODUCTION. File này chạy độc lập, không cần override nào khác.
+#
+#   docker compose -f docker/docker-compose.prod.yml --env-file .env.prod up -d
+#   (hoặc dùng make: prod-up, prod-down, prod-logs, migrate-prod)
+#
+# Khác dev ở bốn điểm: code nằm **trong image** (không mount source, tránh lệch
+# giữa image và host), port chỉ bind 127.0.0.1, log INFO có xoay vòng, và n8n có
+# basic auth.
+#
+# Chạy song song với dev được: khác project name, khác port, khác thư mục data.
+#
+# Mọi state nằm trong ./data/prod/ dưới dạng **bind mount**, không dùng docker
+# volume. Xoá container hay image không mất gì; xoá ./data/prod là mất.
+
+name: qone-media-prod
+
+# ============================================================
+# Biến môi trường truyền vào container.
+#
+# Mọi biến code cần dùng PHẢI khai ở đây: --env-file chỉ thay biến trong chính
+# file compose, KHÔNG tự truyền vào container.
+#
+# Lưu ý về TTS_ENGINE: engine `edge` bị từ chối khi APP_ENV=prod (điều khoản
+# thương mại không rõ ràng). Production dùng `voxcpm` hoặc `fptai`.
+# ============================================================
+x-env: &env
+  APP_ENV: prod
+  TZ: ${TZ:-Asia/Ho_Chi_Minh}
+  PYTHONUNBUFFERED: "1"
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+  MEDIA_ROOT: /data/media
+  MODEL_CACHE: /models
+  HF_HOME: /models/huggingface
+  TORCH_HOME: /models/torch
+
+  # ---- Nghiệp vụ ----
+  TTS_ENGINE: ${TTS_ENGINE:-voxcpm}
+  TTS_SYLLABLES_PER_SEC: ${TTS_SYLLABLES_PER_SEC:-}
+  VOXCPM_VOICE_REF: ${VOXCPM_VOICE_REF:-}
+  FPTAI_API_KEY: ${FPTAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  LLM_MODEL: ${LLM_MODEL:-claude-sonnet-5}
+  LLM_MODEL_HARD: ${LLM_MODEL_HARD:-claude-opus-5}
+  PUBLISH_ENABLED: ${PUBLISH_ENABLED:-false}
+  YOUTUBE_CLIENT_SECRET_FILE: ${YOUTUBE_CLIENT_SECRET_FILE:-}
+  YOUTUBE_TOKEN_FILE: ${YOUTUBE_TOKEN_FILE:-}
+  FB_PAGE_ID: ${FB_PAGE_ID:-}
+  FB_PAGE_ACCESS_TOKEN: ${FB_PAGE_ACCESS_TOKEN:-}
+  WEB_USER: ${WEB_USER}          # bắt buộc ở prod — config từ chối nếu trống
+  WEB_PASSWORD: ${WEB_PASSWORD}
+  API_PORT: ${API_PORT:-8001}
+
+# Log xoay vòng: không có thì một lỗi lặp lại sẽ lấp đầy đĩa và kéo cả máy theo.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
 
 services:
   postgres:
+    image: postgres:17-alpine
     restart: always
-    # Không mở port ra host ở prod — chỉ truy cập trong network của compose
-    logging: &logging
-      driver: json-file
-      options:
-        max-size: "20m"
-        max-file: "5"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - ../data/prod/postgres:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    # KHÔNG mở port ra host: chỉ truy cập trong network của compose.
+    # Cần psql thì: docker compose ... exec postgres psql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *logging
 
   api:
     build:
+      context: ..
+      dockerfile: docker/api/Dockerfile
       target: prod
     restart: always
-    # KHÔNG mount ../src — code đã nằm trong image, tránh lệch giữa image và host
+    environment:
+      <<: *env
+    # KHÔNG mount ../src — code đã nằm trong image
     volumes:
       - ../data/prod/media:/data/media
       - ../data/prod/logs:/data/logs
-    environment:
-      LOG_LEVEL: INFO
-      RELOAD: "false"
     command: uvicorn src.interfaces.api.main:app --host 0.0.0.0 --port 8000 --workers 2
+    # Chỉ 127.0.0.1: muốn ra ngoài thì đặt reverse proxy có TLS trước nó.
     ports:
       - "127.0.0.1:${API_PORT:-8001}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/healthz')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     logging: *logging
 
   worker:
     build:
+      context: ..
+      dockerfile: docker/worker/Dockerfile
       target: prod
     restart: always
+    environment:
+      <<: *env
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
     volumes:
       - ../data/prod/media:/data/media
       - ../data/prod/logs:/data/logs
+      # Model dùng chung dev/prod — artifact bất biến, không phải state.
       - ../data/models:/models
-    environment:
-      LOG_LEVEL: INFO
+    depends_on:
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-1}
+              capabilities: [gpu]
     logging: *logging
 
   n8n:
+    image: n8nio/n8n:latest
     restart: always
     environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+      GENERIC_TIMEZONE: ${TZ:-Asia/Ho_Chi_Minh}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      N8N_RUNNERS_ENABLED: "true"
       N8N_LOG_LEVEL: warn
       N8N_BASIC_AUTH_ACTIVE: "true"
       N8N_BASIC_AUTH_USER: ${N8N_USER}
       N8N_BASIC_AUTH_PASSWORD: ${N8N_PASSWORD}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: postgres
+      DB_POSTGRESDB_DATABASE: ${POSTGRES_DB}
+      DB_POSTGRESDB_USER: ${POSTGRES_USER}
+      DB_POSTGRESDB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POSTGRESDB_SCHEMA: n8n
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
+      WEBHOOK_URL: ${N8N_WEBHOOK_URL}
+      QONE_API_BASE: http://api:8000
+    volumes:
+      - ../data/prod/n8n:/home/node/.n8n
+      - ../data/prod/media:/data/media:ro
     ports:
       - "127.0.0.1:${N8N_PORT:-5679}:5678"
+    depends_on:
+      postgres:
+        condition: service_healthy
     logging: *logging

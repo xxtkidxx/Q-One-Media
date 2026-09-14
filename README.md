@@ -80,7 +80,7 @@ Clean Architecture — mũi tên phụ thuộc luôn chỉ vào trong. Chi tiế
 AGENTS.md · CLAUDE.md     hướng dẫn agent (CLAUDE.md chỉ là con trỏ)
 PLAN.md                   kế hoạch + hiện trạng
 docs/                     đặc tả duy nhất
-docker/                   Dockerfile + compose (base/dev/prod) + schema SQL
+docker/                   Dockerfile + 2 file compose độc lập (dev, prod) + init SQL
 src/domain/               nghiệp vụ thuần, chỉ stdlib — license gate sống ở đây
 src/application/          use case + port
 src/infrastructure/       adapter: Postgres, yt-dlp, (tts/publish/media: chưa có)

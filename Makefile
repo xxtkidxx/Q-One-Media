@@ -2,9 +2,9 @@
 # Windows: chạy trong Git Bash, hoặc dùng trực tiếp lệnh docker compose bên dưới.
 
 DC      := docker compose
-BASE    := -f docker/docker-compose.yml
-DEV     := $(BASE) -f docker/docker-compose.dev.yml --env-file .env.dev
-PROD    := $(BASE) -f docker/docker-compose.prod.yml --env-file .env.prod
+# Hai file compose độc lập, không override lồng nhau.
+DEV     := -f docker/docker-compose.dev.yml  --env-file .env.dev
+PROD    := -f docker/docker-compose.prod.yml --env-file .env.prod
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-up dev-down dev-logs dev-build prod-up prod-down prod-logs prod-build \

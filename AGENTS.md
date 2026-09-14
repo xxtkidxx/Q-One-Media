@@ -72,7 +72,7 @@ Mọi thứ chạy trong Docker. **Không cài Python/ffmpeg/model lên máy hos
 
 ```bash
 # DEV — code mount vào container, hot reload, port mở
-make dev-up            # hoặc: docker compose -f docker/docker-compose.yml -f docker/docker-compose.dev.yml --env-file .env.dev up -d
+make dev-up            # hoặc: docker compose -f docker/docker-compose.dev.yml --env-file .env.dev up -d
 make dev-logs          # tail 50
 make dev-down
 
@@ -85,6 +85,9 @@ make test              # unit test trong container dev, bỏ qua gpu/external/in
 make test-int          # test tích hợp trên Postgres thật (cần container chạy)
 make shell             # bash trong worker container
 ```
+
+**Chỉ có hai file compose**, mỗi file chạy độc lập — `docker-compose.dev.yml` và
+`docker-compose.prod.yml`. Không có file base, không override lồng nhau.
 
 **Dữ liệu runtime nằm trong `./data/`** — bind mount, không dùng docker volume. Xoá container/image không mất gì; xoá `./data/` là mất dữ liệu.
 
