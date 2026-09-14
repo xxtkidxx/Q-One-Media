@@ -96,6 +96,7 @@ def scripted_item(uow, *, script: str, window_sec: float = 60.0, scope=DUB_SCOPE
     item.mark_separated()
     item.mark_transcribed()
     item.send_transcript_to_review()
+    item.approve_transcript()
     item.pick_segment(Segment(0.0, window_sec))
     if scope.may_modify_audio:
         item.attach_script(script_vi=script, clearance=source.clear_for_dubbing(NOW))

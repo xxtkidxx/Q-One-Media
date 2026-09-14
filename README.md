@@ -22,7 +22,7 @@ pipeline media, mặt tiền web nội bộ, adapter publish. Các bước cần
 Mọi thứ trong Docker. **Không cài Python/ffmpeg/model lên máy host.**
 
 ```bash
-cp .env.dev.example .env.dev      # điền: mật khẩu postgres, N8N_ENCRYPTION_KEY, ANTHROPIC_API_KEY
+cp .env.dev.example .env.dev      # điền: mật khẩu postgres, N8N_ENCRYPTION_KEY, GEMINI_API_KEY
 make dev-up                       # API :8008 · n8n :5678
 make migrate                      # alembic upgrade head — BẮT BUỘC lần đầu
 make models                       # tải model vào data/models (~5,8 GB sau khi bỏ model gióng NC)

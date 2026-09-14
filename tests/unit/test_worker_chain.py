@@ -23,6 +23,7 @@ from src.interfaces.worker.handlers import (
     REQUIRED_STAGE,
     enqueue_next,
 )
+from src.interfaces.worker.main import _mark_item_failed
 from tests.fakes import FakeUnitOfWork
 from tests.unit.test_item_lifecycle import item_at_review
 
@@ -64,6 +65,21 @@ def test_khong_xep_buoc_sau_khi_day_dut():
     uow = FakeUnitOfWork()
     enqueue_next(Job(task=JobTask.TRANSCRIBE, item_id=1, id=1), uow, item_id=1)
     assert uow.jobs.all() == []
+
+
+def test_job_khong_retry_duoc_day_item_sang_failed_thay_vi_hien_stage_cu():
+    uow = FakeUnitOfWork()
+    item, _ = item_at_review()
+    item.stage = ItemStage.TRANSCRIPT_APPROVED
+    uow.items.add(item)
+    job = Job(task=JobTask.PICK_SEGMENT, item_id=item.id, id=9)
+
+    _mark_item_failed(job, uow, "LlmRejected: thiếu ANTHROPIC_API_KEY")
+
+    saved = uow.items.get(item.id)
+    assert saved is not None
+    assert saved.stage is ItemStage.FAILED
+    assert "ANTHROPIC_API_KEY" in (saved.stage_error or "")
 
 
 def test_xep_dung_buoc_tiep_theo_va_giu_uu_tien():

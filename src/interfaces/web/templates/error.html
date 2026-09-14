@@ -1,9 +1,7 @@
 {% extends "base.html" %}
 {% block body %}
 <h1>{{ title }}</h1>
-<div class="note legal">
-  <p style="margin:0">{{ detail }}</p>
-</div>
+<div class="toast-stack" aria-live="assertive"><div class="toast error"><div><strong>{{ title }}</strong><br>{{ detail }}</div><button type="button" onclick="this.parentElement.remove()">×</button></div></div>
 {% if hint %}<p class="sub">{{ hint }}</p>{% endif %}
 <div class="actions">
   <a href="/web"><button class="ghost" type="button">Về bảng điều khiển</button></a>

@@ -47,7 +47,7 @@ def list_review_queue(*, uow: UnitOfWork, limit: int = 50) -> list[ReviewQueueEn
 
 
 def approve_transcript(item_id: int, *, actor: str, uow: UnitOfWork) -> Item:
-    """Người soát transcript xong → xếp việc chọn đoạn.
+    """Người soát transcript xong → chờ người chọn một hoặc nhiều đoạn.
 
     Đây là một trong hai chỗ dây nối giữa các bước **cố tình đứt**: worker dừng
     sau khi nhận dạng lời, và chỉ thao tác của người mới nối tiếp được. Nhất là
@@ -59,11 +59,12 @@ def approve_transcript(item_id: int, *, actor: str, uow: UnitOfWork) -> Item:
             raise TranscriptNotAwaitingReview(
                 f"item #{item_id} đang ở {item.stage}, không phải đang chờ soát transcript"
             )
-        uow.jobs.enqueue(Job(task=JobTask.PICK_SEGMENT, item_id=item_id))
+        item.approve_transcript()
+        uow.items.update(item)
         uow.audit.record(
             entity="item",
             entity_id=item_id,
-            action="transcript_approved",
+            action="transcript_approved_awaiting_segment_selection",
             actor=actor,
         )
         uow.commit()
@@ -97,6 +98,32 @@ def approve_item(
             action="review_approved",
             actor=actor,
             detail={"notes": notes, "publish_queued": queue_publish},
+        )
+        uow.commit()
+    return item
+
+
+def queue_publish(item_id: int, *, actor: str, uow: UnitOfWork, enabled: bool) -> Item:
+    """Xếp việc đăng cho một item **đã duyệt**.
+
+    Tách khỏi ``approve_item`` vì hai lý do khác nhau về thời điểm: người duyệt có
+    thể duyệt hôm nay và đăng ngày mai, và khi ``PUBLISH_ENABLED=false`` thì lúc
+    duyệt không xếp gì cả — nút đăng là chỗ người dùng quay lại sau. Cờ kill-switch
+    vẫn chỉ chặn thêm, không bao giờ mở thêm: không có đường nào đăng khi nó tắt.
+    """
+    from src.application.use_cases.publish_item import PublishDisabled
+
+    if not enabled:
+        raise PublishDisabled("PUBLISH_ENABLED=false — hệ thống đang không đăng gì")
+    with uow:
+        item = _get(uow, item_id)
+        if item.stage is not ItemStage.APPROVED:
+            raise DomainError(
+                f"item #{item_id} đang ở {item.stage}, chỉ item đã duyệt mới đăng được"
+            )
+        uow.jobs.enqueue(Job(task=JobTask.PUBLISH, item_id=item_id))
+        uow.audit.record(
+            entity="item", entity_id=item_id, action="publish_queued", actor=actor
         )
         uow.commit()
     return item

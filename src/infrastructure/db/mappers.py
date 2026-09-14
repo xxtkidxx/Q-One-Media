@@ -124,6 +124,9 @@ def item_to_domain(row: ItemRow) -> Item:
         segment=segment,
         script_vi=row.script_vi,
         script_sources=tuple(row.script_sources or ()),
+        parent_item_id=row.parent_item_id,
+        clip_index=row.clip_index,
+        include_attribution=row.include_attribution,
         review_by=row.review_by,
         review_at=row.review_at,
         review_notes=row.review_notes,
@@ -151,6 +154,9 @@ def item_apply(row: ItemRow, item: Item) -> ItemRow:
     row.segment_end_sec = item.segment.end_sec if item.segment else None
     row.script_vi = item.script_vi
     row.script_sources = list(item.script_sources) or None
+    row.parent_item_id = item.parent_item_id
+    row.clip_index = item.clip_index
+    row.include_attribution = item.include_attribution
     row.review_by = item.review_by
     row.review_at = item.review_at
     row.review_notes = item.review_notes

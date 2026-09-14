@@ -31,6 +31,7 @@ class ItemStage(StrEnum):
     SEPARATED = "separated"
     TRANSCRIBED = "transcribed"
     TRANSCRIPT_REVIEW = "transcript_review"
+    TRANSCRIPT_APPROVED = "transcript_approved"
     SEGMENT_PICKED = "segment_picked"
     SCRIPTED = "scripted"
     VOICED = "voiced"

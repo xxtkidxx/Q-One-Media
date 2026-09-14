@@ -7,6 +7,13 @@
   tiếng Việt, và ở đó không ai còn đối chiếu được với nguồn nữa.
 </p>
 
+{% if approved %}
+<div class="note" style="border-left-color:var(--ok)">
+  Đã ghi nhận transcript item #{{ approved }} đạt và chuyển sang bước chọn đoạn.
+  Item không còn nằm trong danh sách chờ soát. <a href="/web">Xem trạng thái trên bảng điều khiển</a>.
+</div>
+{% endif %}
+
 {% for row in rows %}
 <div class="card">
   <h2 style="margin-top:0">
@@ -15,6 +22,8 @@
     {% if row.needs_extra %}<span class="pill warn">soát kỹ hơn</span>{% endif %}
   </h2>
   <p class="sub">
+    Nguồn #{{ row.source.id if row.source else "?" }} ·
+    {{ row.source.display_name if row.source and row.source.display_name else "không rõ tên nguồn" }} ·
     <a href="{{ row.item.url.value }}" target="_blank" rel="noopener">nguồn gốc</a>
     {% if row.item.duration_sec %} · {{ row.item.duration_sec }}s{% endif %}
   </p>
@@ -40,7 +49,7 @@
       </div>
     </div>
     <div class="actions">
-      <button type="submit">Transcript đạt — cho chọn đoạn</button>
+      <button type="submit">Xác nhận transcript đạt — chuyển sang chọn đoạn</button>
     </div>
     <p class="sub" style="margin-bottom:0">
       Transcript sai nhiều thì sửa file

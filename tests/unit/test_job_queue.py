@@ -69,6 +69,15 @@ def test_done_la_trang_thai_cuoi():
         job.claim(worker="w1", at=NOW)
 
 
+def test_job_dang_chay_co_the_huy_khi_item_da_lac_stage():
+    job = Job(task=JobTask.DOWNLOAD, item_id=1, id=1)
+    job.claim(worker="worker-1", at=NOW)
+
+    job.cancel()
+
+    assert job.status is JobStatus.CANCELLED
+
+
 def test_uu_tien_khan_nho_hon_uu_tien_thuong():
     """Số nhỏ = làm trước. Douyin phải khẩn vì URL CDN hết hạn vài giờ."""
     assert PRIORITY_URGENT < PRIORITY_NORMAL

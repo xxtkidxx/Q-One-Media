@@ -44,7 +44,9 @@ class JobStatus(StrEnum):
 
 _ALLOWED: dict[JobStatus, frozenset[JobStatus]] = {
     JobStatus.PENDING: frozenset({JobStatus.RUNNING, JobStatus.CANCELLED}),
-    JobStatus.RUNNING: frozenset({JobStatus.DONE, JobStatus.FAILED, JobStatus.PENDING}),
+    JobStatus.RUNNING: frozenset(
+        {JobStatus.DONE, JobStatus.FAILED, JobStatus.PENDING, JobStatus.CANCELLED}
+    ),
     JobStatus.FAILED: frozenset({JobStatus.PENDING, JobStatus.CANCELLED}),
     JobStatus.DONE: frozenset(),
     JobStatus.CANCELLED: frozenset(),

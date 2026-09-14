@@ -18,6 +18,9 @@ from src.infrastructure.llm.claude import (
     format_transcript_with_timestamps,
     load_glossary_json,
 )
+from src.infrastructure.llm.gemini import GeminiSegmentAdvisor
+from src.infrastructure.llm.registry import build_script_writer, build_segment_advisor
+from src.shared.config import LLMSettings
 
 
 class StubAdvisor(ClaudeSegmentAdvisor):
@@ -50,6 +53,57 @@ class StubWriter(ClaudeScriptWriter):
 def test_thieu_api_key_thi_bao_loi_khong_retry():
     with pytest.raises(LlmRejected):
         ClaudeSegmentAdvisor(api_key="")
+
+
+def test_gemini_thieu_api_key_thi_bao_dung_ten_bien():
+    with pytest.raises(LlmRejected, match="GEMINI_API_KEY"):
+        GeminiSegmentAdvisor(api_key="")
+
+
+def test_registry_chon_provider_da_cau_hinh():
+    gemini = LLMSettings(
+        provider="gemini", gemini_api_key="g-key", model="gemini-3.5-flash-lite"
+    )
+    assert isinstance(build_segment_advisor(gemini), GeminiSegmentAdvisor)
+
+    anthropic = LLMSettings(provider="anthropic", api_key="a-key", model="claude-test")
+    assert isinstance(build_script_writer(anthropic), ClaudeScriptWriter)
+
+
+def test_registry_tu_choi_provider_khong_ho_tro():
+    with pytest.raises(LlmRejected, match="không hỗ trợ"):
+        build_segment_advisor(LLMSettings(provider="unknown"))
+
+
+def test_gemini_doc_json_schema_va_doc_ket_qua(monkeypatch):
+    captured = {}
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "candidates": [{"content": {"parts": [{"text": '{"proposals": '
+                    '[{"start_sec": 10, "end_sec": 70, "rationale": "có biểu đồ"}]}'
+                }]}}]
+            }
+
+    def fake_post(url, **kwargs):
+        captured.update(url=url, **kwargs)
+        return Response()
+
+    monkeypatch.setattr("src.infrastructure.llm.gemini.httpx.post", fake_post)
+    advisor = GeminiSegmentAdvisor(api_key="g-key", model="gemini-test")
+    assert advisor.propose(transcript="[00:10] dữ kiện", duration_sec=100) == [
+        (10.0, 70.0, "có biểu đồ")
+    ]
+    assert captured["headers"]["x-goog-api-key"] == "g-key"
+    config = captured["json"]["generationConfig"]
+    assert config["responseMimeType"] == "application/json"
+    assert config["responseJsonSchema"]["required"] == ["proposals"]
 
 
 # ---------------- Kiểm đề xuất đoạn ----------------

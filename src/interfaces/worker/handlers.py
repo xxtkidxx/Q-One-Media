@@ -154,15 +154,13 @@ def handle_transcribe(job: Job, uow: UnitOfWork, settings: Settings) -> None:
 
 
 def handle_pick_segment(job: Job, uow: UnitOfWork, settings: Settings) -> None:
-    from src.infrastructure.llm.claude import (
-        ClaudeSegmentAdvisor,
-        format_transcript_with_timestamps,
-    )
+    from src.infrastructure.llm.claude import format_transcript_with_timestamps
+    from src.infrastructure.llm.registry import build_segment_advisor
 
     item_id = _need_item(job)
     pick_segment(
         item_id,
-        advisor=ClaudeSegmentAdvisor(api_key=settings.llm.api_key, model=settings.llm.model),
+        advisor=build_segment_advisor(settings.llm),
         format_transcript=format_transcript_with_timestamps,
         media_root=settings.media_root,
         uow=uow,
@@ -171,7 +169,7 @@ def handle_pick_segment(job: Job, uow: UnitOfWork, settings: Settings) -> None:
 
 
 def handle_write_script(job: Job, uow: UnitOfWork, settings: Settings) -> None:
-    from src.infrastructure.llm.claude import ClaudeScriptWriter
+    from src.infrastructure.llm.registry import build_script_writer
 
     item_id = _need_item(job)
     with uow:
@@ -182,7 +180,7 @@ def handle_write_script(job: Job, uow: UnitOfWork, settings: Settings) -> None:
 
     write_vietnamese_script(
         item_id,
-        writer=ClaudeScriptWriter(api_key=settings.llm.api_key, model=settings.llm.model),
+        writer=build_script_writer(settings.llm),
         speech_rate=settings.tts.measured_rate,
         glossary=glossary,
         media_root=settings.media_root,
@@ -277,7 +275,13 @@ def handle_render(job: Job, uow: UnitOfWork, settings: Settings) -> None:
         voice = settings.paths.absolute(item.path_work.relative_path)
         segment = item.segment
         aspect = item.aspect_ratio
-        attribution = source.evidence.attribution_text if source.evidence else None
+        evidence = source.evidence
+        attribution_required = bool(evidence and evidence.license_type.requires_attribution)
+        attribution = (
+            evidence.attribution_text
+            if evidence and (attribution_required or item.include_attribution)
+            else None
+        )
 
     work = transcript_dir(settings.media_root, item_id)
     cues_file = work / "cues.json"
@@ -387,7 +391,7 @@ REQUIRED_STAGE: dict[JobTask, tuple[ItemStage, ...]] = {
     JobTask.DOWNLOAD: (ItemStage.INBOX,),
     JobTask.SEPARATE: (ItemStage.DOWNLOADED,),
     JobTask.TRANSCRIBE: (ItemStage.SEPARATED,),
-    JobTask.PICK_SEGMENT: (ItemStage.TRANSCRIPT_REVIEW,),
+    JobTask.PICK_SEGMENT: (ItemStage.TRANSCRIPT_APPROVED,),
     JobTask.WRITE_SCRIPT: (ItemStage.SEGMENT_PICKED,),
     JobTask.SYNTHESIZE: (ItemStage.SCRIPTED,),
     JobTask.ALIGN: (ItemStage.VOICED,),

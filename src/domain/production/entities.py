@@ -36,8 +36,9 @@ _ALLOWED: dict[ItemStage, frozenset[ItemStage]] = {
     ItemStage.SEPARATED: frozenset({ItemStage.TRANSCRIBED, ItemStage.FAILED, ItemStage.REJECTED}),
     ItemStage.TRANSCRIBED: frozenset({ItemStage.TRANSCRIPT_REVIEW, ItemStage.FAILED}),
     ItemStage.TRANSCRIPT_REVIEW: frozenset(
-        {ItemStage.SEGMENT_PICKED, ItemStage.TRANSCRIBED, ItemStage.REJECTED}
+        {ItemStage.TRANSCRIPT_APPROVED, ItemStage.TRANSCRIBED, ItemStage.REJECTED}
     ),
+    ItemStage.TRANSCRIPT_APPROVED: frozenset({ItemStage.SEGMENT_PICKED, ItemStage.FAILED}),
     ItemStage.SEGMENT_PICKED: frozenset({ItemStage.SCRIPTED, ItemStage.FAILED, ItemStage.REJECTED}),
     # scripted -> segment_picked: kịch bản tràn ngân sách âm tiết thì viết lại (F2.3)
     ItemStage.SCRIPTED: frozenset(
@@ -79,6 +80,9 @@ class Item:
     segment: Segment | None = None
     script_vi: str | None = None
     script_sources: tuple[str, ...] = ()
+    parent_item_id: int | None = None
+    clip_index: int = 1
+    include_attribution: bool = True
 
     review_by: str | None = None
     review_at: datetime | None = None
@@ -145,6 +149,9 @@ class Item:
 
     def send_transcript_to_review(self) -> None:
         self._to(ItemStage.TRANSCRIPT_REVIEW)
+
+    def approve_transcript(self) -> None:
+        self._to(ItemStage.TRANSCRIPT_APPROVED)
 
     def pick_segment(self, segment: Segment) -> None:
         if self.duration_sec is not None and segment.end_sec > self.duration_sec + 1:

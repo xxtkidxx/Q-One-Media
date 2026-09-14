@@ -16,6 +16,7 @@ from src.application.use_cases.publish_item import (
     QuotaExhausted,
     publish_item,
 )
+from src.domain.errors import DomainError
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import (
     AspectRatio,
@@ -28,6 +29,7 @@ from src.domain.publishing.value_objects import (
     PublishStatus,
     VideoMetadata,
 )
+from src.domain.scheduling.entities import JobTask
 from src.domain.sourcing.entities import Source
 from src.domain.sourcing.value_objects import (
     Language,
@@ -92,6 +94,7 @@ def build_approved_item(
     item.mark_separated()
     item.mark_transcribed()
     item.send_transcript_to_review()
+    item.approve_transcript()
     item.pick_segment(Segment(120.0, 180.0))
     item.attach_script(script_vi="Kịch bản tiếng Việt.", clearance=source.clear_for_dubbing(NOW))
     item.mark_voiced()
@@ -289,6 +292,28 @@ def test_hang_doi_duyet_hien_cong_duyet_du_kien_theo_ngon_ngu(uow, clock):
     queue = review_item.list_review_queue(uow=uow)
     assert len(queue) == 1
     assert queue[0].expected_minutes == (35, 55)
+
+
+def test_nut_xuat_ban_chi_xep_viec_cho_item_da_duyet(uow, clock):
+    """Nút “Xuất bản” trên web xếp việc đăng, không tự đăng — và không đi vòng gate."""
+    item = build_approved_item(uow)  # còn ở human_review
+
+    with pytest.raises(DomainError):
+        review_item.queue_publish(item.id, actor="q", uow=uow, enabled=True)
+    assert [j.task for j in uow.jobs.all()] == []
+
+    review_item.approve_item(item.id, actor="q", uow=uow, clock=clock)
+    review_item.queue_publish(item.id, actor="quan.nguyen", uow=uow, enabled=True)
+    assert JobTask.PUBLISH in [j.task for j in uow.jobs.all()]
+    assert "publish_queued" in uow.audit.actions()
+
+
+def test_xuat_ban_khi_kill_switch_tat_thi_bi_chan(uow, clock):
+    """``PUBLISH_ENABLED=false`` chỉ chặn thêm — không có đường nào đăng khi nó tắt."""
+    item = build_approved_item(uow)
+    review_item.approve_item(item.id, actor="q", uow=uow, clock=clock)
+    with pytest.raises(PublishDisabled):
+        review_item.queue_publish(item.id, actor="q", uow=uow, enabled=False)
 
 
 def test_nguoi_duyet_tra_ve_viet_lai(uow, clock):

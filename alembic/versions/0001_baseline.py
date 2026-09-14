@@ -39,6 +39,7 @@ ENUMS: dict[str, tuple[str, ...]] = {
         "separated",
         "transcribed",
         "transcript_review",
+        "transcript_approved",
         "segment_picked",
         "scripted",
         "voiced",

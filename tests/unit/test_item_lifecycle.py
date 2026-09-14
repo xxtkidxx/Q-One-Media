@@ -41,6 +41,7 @@ def item_at_review() -> tuple[Item, Item]:
     item.mark_separated()
     item.mark_transcribed()
     item.send_transcript_to_review()
+    item.approve_transcript()
     item.pick_segment(Segment(120.0, 180.0, rationale="có số liệu Cpk kiểm chứng được"))
     item.attach_script(script_vi="Cpk chỉ nói về độ lệch trong nhóm mẫu.",
                        clearance=src.clear_for_dubbing(NOW))
@@ -68,6 +69,20 @@ def test_item_bi_chan_license_thi_dung_han_khong_di_tiep_duoc():
     # license_blocked không có đường ra — phải đi duyệt nguồn, không đi tắt
     with pytest.raises(InvalidTransition):
         item.mark_downloaded(path=MediaAsset("source/a.mp4"))
+
+
+def test_duyet_transcript_co_trang_thai_rieng_khong_con_nam_trong_hang_cho():
+    item = fresh_item()
+    item.mark_downloaded(path=MediaAsset("source/a.mp4"))
+    item.mark_separated()
+    item.mark_transcribed()
+    item.send_transcript_to_review()
+
+    item.approve_transcript()
+
+    assert item.stage is ItemStage.TRANSCRIPT_APPROVED
+    item.pick_segment(Segment(10.0, 70.0))
+    assert item.stage is ItemStage.SEGMENT_PICKED
 
 
 # ---------------- Gate duyệt của người ----------------
@@ -111,6 +126,7 @@ def test_khong_dung_clearance_cua_nguon_khac():
     item.mark_separated()
     item.mark_transcribed()
     item.send_transcript_to_review()
+    item.approve_transcript()
     item.pick_segment(Segment(10.0, 70.0))
 
     nguon_khac = approved_source(id=99, url=SourceUrl("https://vimeo.com/other"))
@@ -144,6 +160,7 @@ def test_doan_khong_duoc_vuot_do_dai_video():
     item.mark_separated()
     item.mark_transcribed()
     item.send_transcript_to_review()
+    item.approve_transcript()
     with pytest.raises(InvariantViolation):
         item.pick_segment(Segment(60.0, 150.0))
 
@@ -218,6 +235,7 @@ def test_kich_ban_tran_thi_item_quay_ve_buoc_viet_lai():
     item.mark_separated()
     item.mark_transcribed()
     item.send_transcript_to_review()
+    item.approve_transcript()
     item.pick_segment(Segment(0.0, 60.0))
     item.attach_script(script_vi="bản quá dài", clearance=src.clear_for_dubbing(NOW))
     item.rewrite_script("TTS dài 68s, khung 60s — vượt 13%")

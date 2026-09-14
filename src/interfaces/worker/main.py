@@ -18,6 +18,7 @@ import socket
 import time
 from datetime import UTC, datetime
 
+from src.domain.production.value_objects import ItemStage
 from src.domain.scheduling.entities import Job
 from src.infrastructure.db.uow import SqlUnitOfWork, make_engine, make_session_factory
 from src.interfaces.worker.handlers import (
@@ -71,6 +72,19 @@ def _stage_ok(job: Job, uow: SqlUnitOfWork) -> tuple[bool, str]:
     return True, ""
 
 
+def _mark_item_failed(job: Job, uow: SqlUnitOfWork, error: str) -> None:
+    """Phản ánh lỗi job không retry được lên item để UI không hiện stage cũ."""
+    if job.item_id is None:
+        return
+    with uow:
+        item = uow.items.get(job.item_id)
+        if item is None or item.stage.is_terminal or item.stage is ItemStage.FAILED:
+            return
+        item.fail(error)
+        uow.items.update(item)
+        uow.commit()
+
+
 def run_once(uow: SqlUnitOfWork, settings: Settings, *, worker_id: str) -> bool:
     """Lấy và chạy một việc. Trả về False nếu hàng đợi rỗng."""
     with uow:
@@ -111,9 +125,12 @@ def run_once(uow: SqlUnitOfWork, settings: Settings, *, worker_id: str) -> bool:
         # Phân loại theo thuộc tính ``retryable`` mà chính lớp lỗi khai. Lỗi
         # license và lỗi input không retry; lỗi mạng và rate limit thì có.
         retryable = bool(getattr(exc, "retryable", False))
+        error = f"{type(exc).__name__}: {exc}"
+        if not retryable:
+            _mark_item_failed(job, uow, error)
         with uow:
             job.fail(
-                error=f"{type(exc).__name__}: {exc}",
+                error=error,
                 at=datetime.now(UTC),
                 retryable=retryable,
             )

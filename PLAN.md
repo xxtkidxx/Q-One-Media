@@ -8,15 +8,15 @@
 
 ## 1. Hiện trạng — một dòng
 
-**Lõi đã chạy thật: license gate + hộp thư URL + hàng đợi việc, trên Postgres trong Docker. Các bước media (ASR, TTS, render, publish) chưa có. Vẫn chờ G0 kiểm chứng khả thi và 5 quyết định của người dùng.**
+**Lõi đã chạy thật: license gate + hộp thư URL + hàng đợi việc, trên Postgres trong Docker. Các bước media (ASR, TTS, render, publish) chưa có. Vẫn chờ G0 kiểm chứng khả thi và các quyết định đầu vào của người dùng.**
 
 | | |
 |---|---|
 | Mốc hiện tại | **G2 + GW xong về code** · G0 vẫn mở và giờ đã thành đường găng |
 | Tiến độ tổng | ~75% code Giai đoạn 1; các bước cần GPU/credential chưa chạy thật |
-| Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
+| Chặn lớn nhất | Cần nhập URL nguồn thật và bằng chứng giấy phép sẵn có vào `sources` để chạy bước tải thật |
 | Đã kiểm chứng | **226 unit + 43 integration + 8 GPU** test xanh, ruff sạch; **`make smoke` ra video 9:16 thật có phụ đề tiếng Việt, phát được trong `/web/review`**; 77 thuật ngữ đã nạp vào `glossary`; **image worker chạy được model thật trên GPU** (Python 3.11 bản chính thức, torch 2.6+cu124, ctranslate2 4.8.2 khớp cuDNN 9) |
-| Việc tiếp theo | **Chỉ còn chờ bạn**: `ANTHROPIC_API_KEY` cho hai bước LLM (chọn đoạn, viết kịch bản) và URL nguồn có quyền để test bước tải thật. Mọi thứ khác trong chuỗi đã chạy được với model thật |
+| Việc tiếp theo | **Chỉ còn chờ bạn**: `GEMINI_API_KEY` (free tier được) cho hai bước LLM (chọn đoạn, viết kịch bản) và URL nguồn có quyền để test bước tải thật. Mọi thứ khác trong chuỗi đã chạy được với model thật |
 
 ---
 
@@ -50,13 +50,12 @@ Ký hiệu: `[ ]` chưa làm · `[~]` đang làm · `[x]` xong · `[!]` bị ch�
 
 ### G0 — Kiểm chứng khả thi (tuần 1)
 
-Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép · giọng nào dùng được**.
+Mục tiêu: trả lời **tải được từ đâu · giấy phép sẵn có áp dụng cho nguồn nào · giọng nào dùng được**.
 
-- [ ] **G0.1** Gửi thư xin phép 3–5 hãng thiết bị *(không cần kỹ sư — ROI cao nhất)*
-- [ ] **G0.2** Đọc điều khoản media kit của 3–5 hãng, ghi vào `sources`
-- [~] **G0.3** `YtDlpProbe` chạy đúng trên URL YouTube thật (channel_id, duration, kích thước). **Chỉ đọc metadata công khai, không tải nội dung** — license gate cấm, và đó đúng là bước bảo vệ quyền. Còn phải test Douyin/Bilibili/Facebook
-- [x] **G0.4** Không dùng VideoLingo nữa (D23). **`make smoke` chạy toàn chuỗi ra video thật trên GPU**: Demucs tách stem thật, gióng phụ đề bằng word timestamp của `large-v3` (khớp 0,95), reframe blur 1280×720 → 720×1280, trộn có ducking ở −20 dB, burn phụ đề Be Vietnam Pro, `loudnorm`. Còn giả đúng hai chỗ: bước tải (dùng `lavfi`) và hai bước LLM — cả hai chờ `ANTHROPIC_API_KEY` và URL nguồn có quyền
-- [ ] **G0.5** Blind test giọng: VoxCPM2 vs FPT.AI vs Viettel bằng thuật ngữ SPC/MSA thật
+- [ ] **G0.2** Đối chiếu giấy phép/hợp đồng sẵn có với từng chủ nguồn, ghi phạm vi quyền và bằng chứng vào `sources`
+- [~] **G0.3** YouTube đã chạy trên hai video thật. Mới nhất: CQE Academy `H6St9mCKWuA`, probe đúng `channel_id=UCTpQaKtfp1LIPKXHX0q0u7g`, 956 giây, 1920×1080; source #6 được duyệt theo xác nhận giấy phép của người dùng và yt-dlp tải thành công 35,6 MB. Ownership gate cũng từ chối đúng khi URL này bị thử dưới nguồn Blender (#1). **Chưa có URL source approved cho Douyin/Bilibili/Facebook nên chưa test ba nền tảng đó**
+- [~] **G0.4** Pipeline video CQE Academy thật đã chạy hết đến gate `human_review` (item #7): license gate → tải → Demucs GPU → Whisper `large-v3` GPU → người soát transcript → LLM chọn đoạn/viết kịch bản → VoxCPM2 → align → render đều xanh. Đoạn chọn 302–372 giây; output `output/item-00000007/final.mp4`. Transcript nhận đúng nhiều thuật ngữ nhưng có lỗi Cp/Cpk/Pp/Ppk và lặp câu phút 8–11; còn người nghe duyệt chất lượng thành phẩm
+- [~] **G0.5** VoxCPM2 sinh giọng Việt thật trên RTX 3070 với câu kỹ thuật; test xanh, VRAM đỉnh 6,15 GB và còn rảnh 5,43/8,0 GB sau khi nhả model. Mẫu nghe: `data/dev/media/output/g0-voice-test/voxcpm2-technical-vi.wav`. **Chưa blind test được với FPT.AI/Viettel vì chưa có credential và cần người nghe chấm**
 - [ ] **G0.6** Clone thử giọng một kỹ sư NMI bằng VoxCPM2
 - [~] **G0.7** `make speech-rate` đo tự động. **Đo được 3,54 âm tiết/giây** với edge-tts — các nguồn trên mạng ghi 5,28–6, lệch ~40%. Còn phải đo lại với VoxCPM2
 - [x] **G0.8** Be Vietnam Pro **đạt** với chuỗi đủ dấu, kiểm bằng libass thật. `make fonts` tải font, `check_font_covers_vietnamese()` kiểm tự động
@@ -80,8 +79,8 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [~] **G2.4** `src/infrastructure/ingest/ytdlp.py` — wrapper + probe metadata xong; ưu tiên khẩn cho Douyin xong. **Chưa test trên URL Douyin thật** (G0.3)
 - [x] **G2.5** Job queue trên Postgres (`FOR UPDATE SKIP LOCKED`) + thu hồi việc của worker đã chết
 - [x] **G2.6** Adapter + handler worker xong, **đã chạy với model thật trên GPU**: Demucs tách stem, Whisper `large-v3` nhận dạng, gióng phụ đề, VoxCPM2 sinh giọng — cả bốn tuần tự trên một card 8 GB, canh bằng `make test-gpu`
-- [~] **G2.7** Prompt + kiểm đầu ra + handler xong; **chưa gọi API thật**
-- [~] **G2.8** Prompt + ngân sách âm tiết xong; glossary chờ G1.3
+- [x] **G2.7** Prompt + kiểm đầu ra + handler xong; có registry chọn `gemini|anthropic`; gọi API thật thành công và chọn đoạn item #7
+- [x] **G2.8** Prompt + ngân sách âm tiết xong; chỉ gửi transcript trong đoạn đã chọn; `gemini-3.5-flash-lite` viết kịch bản item #7 thành công, glossary đã nạp 77 thuật ngữ
 - [x] **G2.9** VoxCPM2 + FPT.AI sau cùng port xong. **VoxCPM2 đã sinh giọng tiếng Việt thật trên GPU** (`openbmb/VoxCPM2`, sample rate 48 kHz đọc từ model chứ không đoán). Còn lại là blind test chọn giọng (G0.5) — việc đánh giá, không phải việc code
 - [x] **G2.10** `align_known_text()` + gộp dòng phụ đề, **đã chạy với model thật trên GPU**. Không dùng model gióng của WhisperX: `nguyenvulebinh/wav2vec2-base-vi` là `cc-by-nc-4.0` (không thương mại được) và lại thiếu CTC head nên timing vô nghĩa mà không báo lỗi (D49). Thay bằng word timestamp của `large-v3` — **chữ trong phụ đề vẫn là chữ mình viết**, Whisper chỉ cấp thời gian. Bỏ WhisperX hoàn toàn (D53)
 - [x] **G2.11** Trộn audio qua Easel `audio_mix` (nền −20 dB) + `loudnorm`
@@ -102,6 +101,24 @@ Quyết định kỹ thuật: **Jinja2 + HTMX server-rendered**, không SPA — 
 - [x] **GW.4** Dashboard: item theo từng bước + công duyệt tồn + hộp thư URL
 - [x] **GW.5** Phục vụ `media/output` chỉ đọc; `source/` và `work/` không ra HTTP
 - [x] **GW.6** Basic auth (`WEB_USER`/`WEB_PASSWORD`), **bắt buộc ở prod**; `/healthz`+`/readyz` luôn mở
+- [x] **GW.7** Hợp nhất thao tác theo nguồn: mặc định hiện tất cả, lọc trạng thái, tìm kiếm, phân trang, popup thêm nguồn/video, lịch sử audit và tiến trình item ngay trong `/web/sources`
+- [x] **GW.8** Người dùng chọn thủ công một hoặc nhiều khoảng thời gian; mỗi khoảng tạo một item con/pipeline độc lập. Ghi nguồn là tùy chọn, nhưng giấy phép bắt buộc attribution luôn được ưu tiên
+- [x] **GW.9** Làm lại dashboard hiện đại theo KPI/trạng thái/việc cần xử lý; bỏ hộp nạp URL trùng chức năng với trang Nguồn
+- [x] **GW.10** Nạp video là upload file thật (MP4/MOV/MKV/WebM), chọn nguồn đã duyệt, kiểm tra hình+tiếng bằng ffprobe rồi vào thẳng bước tách audio; nút hiện trực tiếp trên từng dòng nguồn. Mỗi item luôn có khối review đoạn và transcript theo timestamp
+- [x] **GW.11** Form duyệt nguồn giải thích rõ người duyệt/license/bằng chứng/ghi nguồn và có nút gợi ý: tự điền quyền + attribution khi suy ra an toàn (`cc-by`, `own`), không tự cấp quyền hay bịa bằng chứng cho hợp đồng/media kit/stock
+- [x] **GW.12** Rút gọn duyệt nguồn: bằng chứng và chuỗi ghi nguồn là phần bổ sung tùy chọn; bỏ trống thì lưu xác nhận nội bộ, riêng CC BY tự sinh attribution từ tên + URL nguồn
+- [x] **GW.13** Thêm nguồn không tự tải. Mỗi nguồn `single-url` đã duyệt và chưa có item hiện nút “Start tải video” riêng; người dùng chủ động bắt đầu, hệ thống chống tạo trùng. Rút empty-state còn “Chưa có video”
+- [x] **GW.14** Trạng thái item realtime bằng polling snapshot 3 giây: badge, thanh tiến trình và lỗi cập nhật không cần F5; tự reload khi tới gate cần người thao tác và giữ nguồn đang mở
+- [x] **GW.15** Mã hiển thị theo nguồn: clip `#nguồn-số_clip` (ví dụ `#7-1`, `#7-2`), video cha có clip ghi `#7-gốc`. Progress ghi rõ `Bước x/15 · y% · tên bước` và cập nhật realtime
+- [x] **GW.16** Tách trình biên tập transcript thành trang độc lập `/web/review/{item_id}`: video nguồn đồng bộ dòng phụ đề theo thời gian, sửa start/end/text, thêm/xóa/phát từng dòng và lưu/duyệt ngay tại trang. Hai mốc thời gian nằm cùng hàng trong cột gọn; nút phát dạng icon ở cuối dòng để dành tối đa chiều ngang cho phụ đề. Trang nguồn chỉ còn nút mở editor; trang review vẫn giữ gate duyệt video thành phẩm.
+- [x] **GW.17** Chuẩn hóa phản hồi thao tác web thành toast nổi, tự đóng sau 6 giây và có nút đóng; lỗi nghiệp vụ cũng hiển thị theo cùng kiểu. Khi timestamp ASR cuối vượt thời lượng metadata không quá 5 giây, tự giới hạn về mép video thay vì chặn duyệt (item #8 thực tế lệch 375 so với 373 giây).
+
+- [x] **GW.23** Tách hai lối nạp video: nút **“Nạp video”** ở đầu trang nguồn khai báo **một nguồn mới** (URL gốc + giấy phép + phạm vi quyền) rồi nạp file trong một màn hình, còn **“Upload file”** trên từng dòng chỉ nạp thêm video vào nguồn đã duyệt (`POST /web/sources/{id}/uploads`). License gate không nới: vẫn `declare_source` → `approve_source` → `register_uploaded_video`, và lỗi giữa chừng thì xoá file vừa ghi. Chi tiết nguồn xếp dọc: video và clip → hồ sơ pháp lý → lịch sử hoạt động rẽ nhánh giống trang review
+- [x] **GW.22** Quan hệ **một video gốc → nhiều clip con** nói rõ trên UI (tiêu đề, dòng mô tả, link hai chiều). Mọi trạng thái hiển thị bằng **nhãn tiếng Việt**, mã enum chỉ còn làm class CSS — gồm cả dashboard và snapshot polling. Bỏ tab “Duyệt thành phẩm”: tab “Clip đã tạo” liệt kê từng clip kèm trạng thái, % và **nút việc kế tiếp**; bấm vào dòng mở popup có video, kịch bản tiếng Việt và nút thực hiện đúng bước đó (duyệt/viết lại/từ chối, hoặc **xuất bản** qua use case `queue_publish` — kill-switch `PUBLISH_ENABLED` vẫn chặn). Lịch sử hoạt động rẽ nhánh nguồn → video gốc → từng clip. Bỏ % ở video gốc vì con số đó không mô tả tiến độ thật của gì cả
+- [x] **GW.21** Sơ đồ workflow 15 bước là **tham chiếu chung**, không tô theo trạng thái item đang mở (video gốc dừng ở bước 6 rồi clip con đi tiếp — tô theo item nào cũng ra bức tranh sai). Trạng thái thật chỉ nằm ở badge + thanh tiến trình. Trang nguồn chỉ liệt kê **video gốc**, clip con gộp thành thống kê theo trạng thái ngay trên dòng đó và cập nhật realtime; `?open_source=N` mở sẵn đúng nguồn
+- [x] **GW.20** Trang review chia tab (Transcript · Tạo clip · Clip đã tạo · Duyệt thành phẩm · Lịch sử · Nguồn & quyền) với dải **workflow 15 bước** ở đầu trang: mỗi bước hiện % tích luỹ của chính nó và đánh dấu xong/đang làm/chưa tới, cập nhật realtime cùng thanh tiến trình. Tab mở sẵn theo việc đang cần làm; tab đang xem nằm trong hash nên F5 không nhảy về đầu
+- [x] **GW.19** Lỗi nghiệp vụ của các form trên trang review (đoạn ngoài biên 10–180s, thiếu tên người duyệt, thiếu lý do) quay về đúng `/web/review/{id}` dưới dạng toast đỏ thay vì đẩy sang URL của POST. Form chọn đoạn nói trước biên cho phép và hiện độ dài đoạn ngay khi gõ (đỏ khi ngoài biên); tạo clip xong ở lại trang review và thấy bảng clip con kèm tiến trình realtime
+- [x] **GW.18** Gom mọi thao tác của một video về `/web/review/{id}`: thanh tiến trình + trạng thái realtime, form chọn đoạn tạo clip, transcript, duyệt thành phẩm và **lịch sử hoạt động** (audit của item, item cha và nguồn). `/web/sources` rút còn danh sách nguồn/item với tiến trình và nút “Mở trang review”; duyệt transcript xong thì về thẳng trang review để chọn đoạn
 
 **Không làm:** CMS, quản lý người dùng/phân quyền, trang phân tích engagement. 2–5 người nội bộ.
 
@@ -143,11 +160,10 @@ Quyết định kỹ thuật: **Jinja2 + HTMX server-rendered**, không SPA — 
 
 ---
 
-## 4. Ba việc làm ngay, không cần chờ nhau
+## 4. Hai việc làm ngay, không cần chờ nhau
 
-1. **G0.1 — Gửi thư xin phép 3–5 hãng.** Không cần kỹ sư. Nếu một hãng đồng ý, rủi ro pháp lý GĐ1 chuyển thành quy trình tuân thủ bình thường.
-2. **G0.4 + G0.5 — Dựng VideoLingo + VoxCPM2, chạy một video thật.** Nửa ngày, trả lời cùng lúc: chất lượng dịch thuật ngữ, chất lượng giọng Việt, pipeline có chạy trên máy bạn không.
-3. **G0.3 — Test yt-dlp trên URL thật từng nền tảng.** Douyin dễ vỡ nhất; biết ở tuần 1 chứ không phải tuần 6.
+1. **G0.4 + G0.5 — Chạy pipeline + VoxCPM2 trên một video thật.** Trả lời cùng lúc: chất lượng dịch thuật ngữ, chất lượng giọng Việt, pipeline có chạy trên máy bạn không.
+2. **G0.3 — Test yt-dlp trên URL thật từng nền tảng đã có giấy phép.** Douyin dễ vỡ nhất; biết ở tuần 1 chứ không phải tuần 6.
 
 ---
 
@@ -157,14 +173,13 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 
 | # | Câu hỏi | Chặn việc gì |
 |---|---|---|
-| Q1 | **NMI là đại lý/NPP của hãng nào?** Hợp đồng có gồm **quyền sửa audio** không? | G0.2, toàn bộ license gate |
+| Q1 | **5–10 URL nguồn thật thuộc phạm vi giấy phép sẵn có**, kèm chủ nguồn và bằng chứng/phạm vi quyền | G0.2, G0.3, G1.2 |
 | Q2 | **Có GPU ≥8 GB VRAM không?** | G0.10, mô hình chi phí |
-| Q3 | **5–10 URL nguồn thật** | G0.3, G1.2 |
-| Q4 | **Tỷ lệ nguồn tiếng Trung vs Anh?** Có ai đọc được tiếng Trung? | Volume mục tiêu, G1.4 |
-| Q5 | **Ai duyệt, bao nhiêu giờ/tuần?** | Volume mục tiêu |
-| Q6 | **Giọng:** clone kỹ sư NMI hay giọng tổng hợp? Nam/nữ, vùng miền? | G0.5, G0.6 |
-| Q7 | **Có giữ TikTok trong phạm vi?** | G7.1 |
-| Q8 | **Có làm bản tiếng Anh?** | G7.2 |
+| Q3 | **Tỷ lệ nguồn tiếng Trung vs Anh?** Có ai đọc được tiếng Trung? | Volume mục tiêu, G1.4 |
+| Q4 | **Ai duyệt, bao nhiêu giờ/tuần?** | Volume mục tiêu |
+| Q5 | **Giọng:** clone kỹ sư NMI hay giọng tổng hợp? Nam/nữ, vùng miền? | G0.5, G0.6 |
+| Q6 | **Có giữ TikTok trong phạm vi?** | G7.1 |
+| Q7 | **Có làm bản tiếng Anh?** | G7.2 |
 
 ---
 
@@ -227,6 +242,10 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D53 | **Bỏ WhisperX hoàn toàn**, dùng `faster-whisper` trực tiếp | `whisperx 3.3.1` khoá `ctranslate2<4.5` (cuDNN 8) nên không chạy được trên base cuDNN 9; `whisperx 3.8.6` cho phép ctranslate2 mới nhưng đòi `torch~=2.8`, tức một lần di trú nữa cho thứ **ta không còn cần**: phần giá trị nhất của nó là forced alignment, đã bị thay vì license (D49). Phần còn lại — gom batch và VAD — `faster-whisper` có sẵn. Kết quả: **một** đường ASR duy nhất cho cả nhận dạng lời nguồn và mốc thời gian phụ đề |
 | D54 | **Không model nào được giữ trên card qua ranh giới lời gọi** — nạp trong hàm, nhả trong `finally` | Đảo lại thiết kế cũ của `voxcpm.py` (giữ model ở biến module-level cho suốt vòng đời tiến trình). Đo bằng `make measure-load` trên RTX 3070: VoxCPM2 giữ **5,12 GB** làm VRAM rảnh về **0,00/8,0 GB** — việc kế tiếp không nạp nổi Whisper (~3,5 GB). Lý do giữ model là để tránh 120,9 s nạp, nhưng nạp **lại** chỉ mất **31,9 s**: 89 s chênh là biên dịch kernel, trả một lần mỗi tiến trình. Đổi 32 s mỗi việc để không bao giờ `CUDA out of memory` là đổi đáng, nhất là khi mỗi video còn qua 20–35 phút người soát. Hàm nhả chuyển về `src/shared/gpu.py` để ba adapter dùng chung thay vì ba bản copy |
 | D55 | **Bỏ hẳn khái niệm `vendor/`** — code mượn từ dự án mở được viết lại thành module của chính dự án | Quy tắc cũ ("sao nguyên byte, không được sửa, chỉ bọc adapter") nghe thì an toàn nhưng vừa trả giá thật: graph trộn audio của Easel thiếu `aformat` trước `sidechaincompress` nên đổ ngay khi bật ducking, mà luật cấm sửa lại đẩy chỗ chữa ra xa chỗ hỏng. Thêm nữa, adapter phải gọi script qua `subprocess`, nên lỗi về dưới dạng **tiếng Trung trên stderr** — không phân loại được retry được hay không, đúng thứ hàng đợi việc cần. Nay: đọc upstream, hiểu thuật toán, **viết lại** trong `src/` và sửa tự do. Nghĩa vụ Apache-2.0 chuyển sang `THIRD_PARTY_NOTICES.md` — ghi lấy gì, đưa vào đâu, **sửa những gì**, kèm toàn văn license. Bỏ luôn `subtitle_ops.py` (569 dòng chưa hề dùng) |
+| D56 | **Giả định NMI đã có giấy phép nguồn; không thực hiện hoạt động gửi thư xin phép** | Giấy phép sẵn có không tự mở quyền cho mọi URL: vẫn phải đối chiếu đúng chủ nguồn, lưu bằng chứng và khai rõ quyền sửa audio/phụ đề/tái xuất bản/thương mại trong `sources`. License gate và ownership gate giữ nguyên |
+| D57 | **Gemini free tier là LLM mặc định; giữ Claude qua registry** | Hai bước chọn đoạn/viết kịch bản không phụ thuộc Claude. Gemini hỗ trợ JSON Schema và không cần thêm SDK; gọi REST bằng `httpx` sẵn có. Có thể đổi lại bằng `LLM_PROVIDER=anthropic` mà không sửa worker |
+| D58 | Mọi thao tác biên tập tập trung tại `/web/sources`; JavaScript nội tuyến tối thiểu chỉ dùng cho popup, mở chi tiết và thêm dòng chọn clip | Thay D25 theo yêu cầu UX mới; vẫn server-rendered, không SPA và không phụ thuộc CDN. Một video có thể sinh nhiều item con; cờ ghi nguồn tùy chọn không được phép ghi đè nghĩa vụ attribution của license |
+| D59 | “Nạp video” trên web là upload file từ máy, không phải dán URL | File gốc được giữ dưới `media/source/uploads`, vẫn phải chọn nguồn approved và qua license gate; sau ffprobe, item bắt đầu ở `downloaded` và xếp job `separate`. API nhận URL cũ được giữ cho tích hợp tự động, nhưng không còn xuất hiện trong UI |
 
 ---
 
@@ -234,10 +253,10 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 
 | Rủi ro | Mức | Trạng thái |
 |---|---|---|
-| Không đủ nguồn video có license | **Cao** | Đang chờ G0.1, G0.2 |
+| Nhập sai phạm vi giấy phép sẵn có cho nguồn video | **Cao** | License gate vẫn bắt buộc; đối chiếu từng chủ nguồn và lưu bằng chứng ở G0.2 |
 | Giọng Việt VoxCPM2 chưa đạt | Trung bình | Chờ G0.5. Dự phòng: FPT.AI qua cùng interface |
-| Transcript nguồn tiếng Trung sai nhiều (~12,8% CER) | Trung bình | Chờ Q4 — cần người đọc được tiếng Trung |
-| Công người duyệt không kham được | Trung bình | Chờ Q5 |
+| Transcript nguồn tiếng Trung sai nhiều (~12,8% CER) | Trung bình | Chờ Q3 — cần người đọc được tiếng Trung |
+| Công người duyệt không kham được | Trung bình | Chờ Q4 |
 | Không có GPU | Trung bình | Chờ Q2 |
 | Remotion company license (GĐ2) | Thấp | Chưa cần tới G6.6 |
 | **License model AI** — dễ lọt model NonCommercial vào đường sản xuất | **Cao** | Đã bắt 2 ca: OmniVoice (CC-BY-NC) và model gióng của WhisperX (cc-by-nc-4.0). Quy tắc: **kiểm license weights trên HF model card trước khi thêm bất kỳ model nào**, không tin license của code |
@@ -254,3 +273,24 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | 14/09/2026 | Viết nốt 4 script vận hành (`fetch_models`, `fetch_fonts`, `measure_speech_rate`, `youtube_authorize`) · G0.8 + G0.11 xong bằng kiểm chứng thật · engine `edge` cho phép chạy toàn chuỗi **không cần GPU** · đo được tốc độ đọc 3,54 âm tiết/giây |
 | 14/09/2026 | G1.3: tái lập `research/nmi-scan/` bằng script (tham chiếu treo trong tài liệu — thư mục chưa từng tồn tại), rút 77 thuật ngữ từ corpus thật và nạp vào bảng `glossary` |
 | 14/09/2026 | `make smoke` chạy toàn chuỗi không cần GPU → video 9:16 thật có phụ đề tiếng Việt, phát được trong trang duyệt. Ba bug thật lộ ra khi chạy (xem nhật ký commit) |
+| 14/09/2026 | Chốt D56: giả định NMI đã có giấy phép nguồn; phần việc pháp lý chuyển thành đối chiếu và nhập bằng chứng/phạm vi quyền cho từng chủ nguồn. License gate không đổi |
+| 14/09/2026 | G0.3/G0.4 chạy thật trên YouTube Blender Official: probe ownership + CC Attribution, tải video 110 giây, Demucs và Whisper GPU đến gate soát transcript (item #5). G0.5 sinh mẫu VoxCPM2 thật; còn thiếu URL approved Douyin/Bilibili/Facebook, credential FPT/Viettel, API key LLM và đánh giá của người nghe |
+| 14/09/2026 | Sửa state machine job cho phép `running → cancelled`: worker cần chuyển trạng thái này khi đã claim một job cũ nhưng item không còn ở stage phù hợp. `tests/unit/test_job_queue.py`: 8 test xanh |
+| 14/09/2026 | Thêm source #6 cho video CQE Academy `H6St9mCKWuA` theo xác nhận giấy phép của người dùng; scope gồm dịch, sửa audio, phụ đề, tái xuất bản và thương mại, có attribution. Item #7 tải 35,6 MB, Demucs + Whisper GPU xanh và dừng đúng ở gate soát transcript; phát hiện lỗi ASR ở Cp/Cpk/Pp/Ppk và đoạn lặp phút 8–11 |
+| 14/09/2026 | Sửa UX trang soát transcript: mỗi item hiện source ID + tên nguồn; nút nói rõ đây là xác nhận đạt/chuyển bước; redirect sau duyệt có banner thành công và link dashboard. Item #5 được xác định là video Blender showcase từ lần test trước. `tests/integration/test_web_ui.py`: 19 test xanh |
+| 14/09/2026 | Sửa lỗi item đã duyệt transcript vẫn quay lại hàng chờ khi `pick_segment` lỗi: thêm stage `transcript_approved` + migration 0002; job không retry được nay đẩy item sang `failed` và giữ lỗi để dashboard hiển thị. Migration sửa dữ liệu #5/#7 thành `failed: thiếu ANTHROPIC_API_KEY`. Test: 34 item lifecycle, 11 worker chain, 19 web UI đều xanh |
+| 14/09/2026 | Thêm Gemini REST adapter + registry `gemini|anthropic`; Gemini free tier thành mặc định, dùng JSON Schema chung với Claude. Lần gọi thật cho biết 2.5 Flash không còn cấp cho tài khoản mới nên đổi sang `gemini-3.6-flash` theo chính phản hồi API. Cập nhật compose và env mẫu. 17 test adapter LLM + 11 test worker chain xanh, Ruff sạch |
+| 14/09/2026 | Chạy tiếp item #7: Gemini 3.6/3.5 Flash bị 503; Gemma 4 chọn được đoạn nhưng JSON viết kịch bản không ổn định; `gemini-3.5-flash-lite` chạy ổn và thành mặc định. Sửa bug bước viết gửi cả transcript 16 phút thay vì chỉ đoạn 70 giây. VoxCPM2 + align + render xong, item vào `human_review`. Kiểm tra Zen live: model free trả `MissingSessionID`, chỉ được dùng trong ứng dụng OpenCode nên không tích hợp vào pipeline |
+| 14/09/2026 | Thiết kế lại `/web` và `/web/sources`: KPI/biểu đồ, lọc + tìm kiếm + phân trang, popup thêm nguồn/video, tiến trình + transcript + duyệt + audit tại một trang. Thêm migration 0003 và luồng chọn nhiều khoảng để một video sinh nhiều clip độc lập; attribution là tùy chọn trừ license bắt buộc. 21 web integration + 45 unit hồi quy xanh, Ruff sạch |
+| 14/09/2026 | Đổi “Nạp video” từ nhập URL thành upload file thật; chọn nguồn approved, ffprobe kiểm tra media, giữ file gốc và xếp thẳng job tách audio. Đưa nút upload ra từng dòng nguồn và thêm khối “Review chọn đoạn” luôn hiện, gồm đoạn đã chọn/trạng thái chờ và transcript có timestamp. 22 web integration + 2 unit upload xanh, Ruff sạch |
+| 14/09/2026 | Làm rõ form duyệt nguồn bằng nhãn tiếng Việt, mô tả trường bắt buộc và nút “Gợi ý điền”. Preset chỉ tự cấp các quyền suy ra được cho CC BY/nội dung sở hữu; bằng chứng và quyền trong giấy phép riêng vẫn phải do người duyệt xác nhận. 22 web integration xanh |
+| 14/09/2026 | Đơn giản hóa form theo yêu cầu: chuyển bằng chứng/chuỗi ghi nguồn vào mục bổ sung không bắt buộc. Khi trống, web ghi xác nhận giấy phép nội bộ; CC BY tự sinh attribution để renderer vẫn tuân thủ điều kiện giấy phép. 22 web integration xanh |
+| 14/09/2026 | Đổi luồng URL sang chủ động: thêm nguồn chỉ lưu hồ sơ; sau khi duyệt, mỗi nguồn video có nút Start tải riêng và chỉ khi bấm mới enqueue download. Empty-state rút còn “Chưa có video”. 23 web integration xanh, Ruff sạch |
+| 14/09/2026 | Thêm endpoint snapshot `/web/item-status` và polling 3 giây trên trang nguồn. Badge stage, progress và lỗi đổi trực tiếp; tới transcript review/chọn đoạn/human review thì tự reload để hiện form mới, khôi phục nguồn đang mở. 23 web integration xanh, Ruff sạch |
+| 15/09/2026 | GW.23: “Nạp video” tạo nguồn mới kèm khai giấy phép trong cùng form; nạp vào nguồn có sẵn chuyển sang endpoint riêng của nút Upload file. Trang chi tiết nguồn xếp dọc và lịch sử rẽ nhánh theo clip. 30 web integration xanh, Ruff sạch |
+| 15/09/2026 | GW.22: nhãn trạng thái tiếng Việt toàn bộ mặt tiền; tab “Clip đã tạo” có nút việc kế tiếp + popup video/kịch bản/hành động; thêm use case `queue_publish` cho nút Xuất bản; lịch sử rẽ nhánh theo clip; bỏ tab duyệt thành phẩm và bỏ % ở video gốc. 28 web integration + 16 publish flow xanh, Ruff sạch |
+| 15/09/2026 | GW.21: workflow thành sơ đồ tham chiếu trung tính; trang nguồn gộp clip con thành thống kê trên dòng video gốc (snapshot polling nay trả `parent_item_id` để gộp lại phía trình duyệt) và `?open_source=` mở sẵn nguồn. 27 web integration xanh, Ruff sạch |
+| 15/09/2026 | GW.20: chia trang review thành 6 tab và vẽ workflow 15 bước kèm % từng bước ở đầu trang; panel mặc định render sẵn từ server nên không phụ thuộc JS, polling cập nhật cả dải workflow. 27 web integration xanh, Ruff sạch |
+| 15/09/2026 | GW.19: mọi lỗi form của trang review trả về chính trang đó bằng toast (trước đây nhảy sang `/web/items/8/clips` — trang cụt). Form chọn đoạn hiện biên 10–180s lấy thẳng từ domain và độ dài đoạn cập nhật khi gõ; tạo clip xong ở lại review, thêm bảng clip con có tiến trình realtime. 26 web integration xanh, Ruff sạch |
+| 14/09/2026 | GW.18: đẩy chọn đoạn, tiến trình realtime và lịch sử hoạt động vào `/web/review/{id}`; trang nguồn chỉ còn danh sách + nút mở review, bỏ đọc transcript từng item khi render danh sách. Polling 3 giây chạy cả ở trang review và không reload khi đang sửa dở transcript. 25 web integration xanh, Ruff sạch |
+| 14/09/2026 | Đổi mã item toàn cục khó đọc sang mã theo nguồn/clip (`#7-1`, `#7-2`, `#7-gốc`). Thanh trạng thái hiện rõ số bước trên 15, phần trăm tổng pipeline và tên tiếng Việt; snapshot realtime trả đủ step/percent/label. 23 web integration xanh, Ruff sạch |

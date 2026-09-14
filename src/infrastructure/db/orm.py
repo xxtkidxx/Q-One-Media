@@ -123,6 +123,11 @@ class ItemRow(Base):
     source_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("sources.id", ondelete="RESTRICT")
     )
+    parent_item_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("items.id", ondelete="CASCADE"), default=None
+    )
+    clip_index: Mapped[int] = mapped_column(Integer, default=1)
+    include_attribution: Mapped[bool] = mapped_column(Boolean, default=True)
     item_url: Mapped[str] = mapped_column(Text, unique=True)
     external_id: Mapped[str | None] = mapped_column(Text, default=None)
     title_original: Mapped[str | None] = mapped_column(Text, default=None)

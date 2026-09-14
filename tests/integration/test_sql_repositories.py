@@ -209,6 +209,7 @@ def test_item_giu_nguyen_segment_duong_dan_va_ty_le(uow):
         item.mark_separated()
         item.mark_transcribed()
         item.send_transcript_to_review()
+        item.approve_transcript()
         item.pick_segment(Segment(120.5, 180.25, rationale="có số liệu Cpk"))
         item.attach_script(
             script_vi="Kịch bản có dấu: ậ ả ằ ộ ự", clearance=src.clear_for_dubbing(NOW)

@@ -56,9 +56,12 @@ class ConfigError(RuntimeError):
 
 @dataclass(frozen=True)
 class LLMSettings:
-    api_key: str
-    model: str = "claude-sonnet-5"
-    model_hard: str = "claude-opus-5"
+    # ``api_key`` giữ tương thích với các chỗ dựng Settings cũ; đây là key Claude.
+    api_key: str = ""
+    provider: str = "gemini"
+    gemini_api_key: str = ""
+    model: str = "gemini-3.5-flash-lite"
+    model_hard: str = "gemini-3.6-pro"
 
 
 @dataclass(frozen=True)
@@ -154,8 +157,10 @@ def load_settings() -> Settings:
         gpu_count=_env_int("GPU_COUNT", 0),
         llm=LLMSettings(
             api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-            model=_env("LLM_MODEL", "claude-sonnet-5"),
-            model_hard=_env("LLM_MODEL_HARD", "claude-opus-5"),
+            provider=_env("LLM_PROVIDER", "gemini").strip().lower(),
+            gemini_api_key=os.environ.get("GEMINI_API_KEY", ""),
+            model=_env("LLM_MODEL", "gemini-3.5-flash-lite"),
+            model_hard=_env("LLM_MODEL_HARD", "gemini-3.6-pro"),
         ),
         tts=TTSSettings(
             engine=_env("TTS_ENGINE", "voxcpm"),

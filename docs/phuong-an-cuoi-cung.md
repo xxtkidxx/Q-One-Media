@@ -260,7 +260,7 @@ Toàn bộ thành phần mã nguồn mở đều miễn phí và cho dùng thư�
 |---|---|
 | **Giờ người duyệt GĐ1** | 20–35 phút/video nguồn tiếng Anh · **35–55 phút nguồn tiếng Trung** → 13–22 giờ/tháng ở 30 video |
 | **GPU** | Bắt buộc thực tế: WhisperX large-v3 + Demucs + VoxCPM2 + reframe. VRAM 8 GB+ |
-| **Nguồn có license** | Câu hỏi sinh tử của GĐ1 — trả lời ở G0 |
+| **Nguồn có license** | Giả định NMI đã có giấy phép; G0 đối chiếu phạm vi quyền và chủ nguồn trước khi nhập hệ thống |
 | **Thời gian duyệt app** | Facebook App Review ~20 ngày; TikTok audit 2–6 tuần |
 
 ### E.3. Công triển khai
@@ -276,7 +276,7 @@ Toàn bộ thành phần mã nguồn mở đều miễn phí và cho dùng thư�
 
 | Mốc | Tuần | Nội dung | Câu hỏi nó trả lời |
 |---|---|---|---|
-| **G0** Kiểm chứng khả thi | 1 | Test yt-dlp trên URL thật **từng nền tảng** (Douyin dễ vỡ nhất) · đọc điều khoản media kit 3–5 hãng · gửi thư xin phép · **cài VoiceStudio, blind test VoxCPM2 vs FPT.AI vs Viettel bằng thuật ngữ SPC/MSA thật** · clone thử giọng một kỹ sư NMI · đo tốc độ đọc thật · test glyph U+1Exx · dựng VideoLingo chạy 1 video với `target_language: 'Tiếng Việt'` · xác nhận GPU | **Tải được từ đâu? Nguồn nào có phép? Giọng nào dùng được?** |
+| **G0** Kiểm chứng khả thi | 1 | Test yt-dlp trên URL thật **từng nền tảng** (Douyin dễ vỡ nhất) · đối chiếu giấy phép sẵn có với từng chủ nguồn và nhập bằng chứng/phạm vi quyền · **blind test VoxCPM2 vs FPT.AI vs Viettel bằng thuật ngữ SPC/MSA thật** · clone thử giọng một kỹ sư NMI · đo tốc độ đọc thật · test glyph U+1Exx · chạy pipeline trên 1 video thật · xác nhận GPU | **Tải được từ đâu? Giấy phép sẵn có áp dụng cho nguồn nào? Giọng nào dùng được?** |
 | **G1** Làm tay có công cụ | 2–3 | 5 video, **mỗi nền tảng ít nhất 1** · rút glossary EN↔VI + ZH↔VI từ corpus song ngữ nmi.vn · audio dùng ducking đơn giản | Mỗi video tốn bao nhiêu phút người, vướng ở đâu |
 | **G2** Tự động hoá GĐ1 | 3–6 | Hộp thư URL + `sources`/`items` + license gate · n8n glue · cắm VoxCPM2 · Demucs · reframe có điều kiện · gate duyệt | Pipeline chạy end-to-end cả nguồn 16:9 và 9:16 |
 | **G3** Publish YouTube | 5–7 | GCP + OAuth + Data API sau `publish()` | Video công khai đầu tiên, số liệu thật |
@@ -285,7 +285,7 @@ Toàn bộ thành phần mã nguồn mở đều miễn phí và cho dùng thư�
 | **G6** Giai đoạn 2 | 11–15 | Crawler text · prompt đa nguồn + lưu vết · sinh ảnh phân lớp · template Remotion · dùng lại toàn bộ hạ tầng GĐ1 | Video nội dung gốc đầu tiên |
 | **G7** Tuỳ chọn | 15+ | TikTok (nếu dữ liệu chứng minh đáng) · bản tiếng Anh (nội dung song ngữ đã có, chỉ tốn TTS) · LinkedIn | |
 
-**G0 không được rút gọn.** Nó trả lời ba câu mà không đoán thay được, và nếu cả ba đều xấu thì thứ tự hai giai đoạn nên đảo lại — vì Giai đoạn 2 cần ít giấy phép hơn.
+**G0 vẫn phải kiểm chứng kỹ thuật và phạm vi quyền.** Giấy phép được giả định là đã có, nhưng mỗi URL vẫn phải khớp đúng chủ nguồn, phạm vi sửa audio, phụ đề, tái xuất bản và sử dụng thương mại trước khi pipeline cấp clearance.
 
 ---
 
@@ -381,31 +381,29 @@ Có thể truyền `initial_prompt` chứa thuật ngữ để cải thiện, nh
 
 | Rủi ro | Mức | Giảm thiểu |
 |---|---|---|
-| **Không đủ nguồn video có license** | **Cao** | G0 đo trước. Nếu xấu → đảo sang GĐ2 trước |
+| **Gán sai giấy phép cho URL/chủ nguồn** | **Cao** | Đối chiếu giấy phép sẵn có theo từng chủ nguồn; lưu bằng chứng và phạm vi quyền; license gate vẫn từ chối nếu thiếu |
 | **Chất lượng giọng Việt của VoxCPM2 chưa đạt** | Trung bình | Blind test ở G0. Dự phòng: FPT.AI qua cùng `custom_tts.py` — đổi engine không đổi kiến trúc |
 | **Chất lượng transcript nguồn tiếng Trung** | Trung bình | Người duyệt phải đọc được tiếng Trung; nếu không có thì hoãn nhóm nguồn này |
 | **Công người duyệt không kham được** | Trung bình | Giảm volume mục tiêu; ưu tiên nguồn tiếng Anh (công duyệt bằng nửa) |
 
 ### G.2. Còn cần bạn quyết
 
-1. **NMI là đại lý/nhà phân phối của hãng nào?** — câu hỏi giá trị nhất. Nếu có, kiểm tra hợp đồng **có bao gồm quyền sửa audio** không (lồng tiếng cần quyền đó, và nó không suy ra từ quyền "dùng lại").
+1. **5–10 URL nguồn thật thuộc phạm vi giấy phép sẵn có**, kèm chủ nguồn và bằng chứng/phạm vi quyền — để xác minh ownership, watermark và khả năng tải.
 2. **Có máy GPU ≥8 GB VRAM không?** Quyết định toàn bộ mô hình chi phí.
-3. **5–10 URL nguồn thật** — để đánh giá tỷ lệ b-roll/talking-head, watermark, và khả năng tải.
-4. **Tỷ lệ nguồn tiếng Trung so với tiếng Anh**, và **có ai đọc được tiếng Trung không?**
-5. **Ai duyệt, bao nhiêu giờ/tuần?**
-6. **Giọng đọc:** clone giọng thật của một kỹ sư NMI (tôi nghiêng về phương án này — xem A.5), hay dùng giọng tổng hợp? Nam/nữ, vùng miền nào?
-7. **Có giữ TikTok trong phạm vi không?**
-8. **Có làm bản tiếng Anh không?** Nội dung song ngữ đã có, chỉ tốn thêm TTS — cách nhân đôi sản lượng rẻ nhất.
+3. **Tỷ lệ nguồn tiếng Trung so với tiếng Anh**, và **có ai đọc được tiếng Trung không?**
+4. **Ai duyệt, bao nhiêu giờ/tuần?**
+5. **Giọng đọc:** clone giọng thật của một kỹ sư NMI (tôi nghiêng về phương án này — xem A.5), hay dùng giọng tổng hợp? Nam/nữ, vùng miền nào?
+6. **Có giữ TikTok trong phạm vi không?**
+7. **Có làm bản tiếng Anh không?** Nội dung song ngữ đã có, chỉ tốn thêm TTS — cách nhân đôi sản lượng rẻ nhất.
 
 ---
 
-## Phần H — Ba việc làm đầu tiên
+## Phần H — Hai việc làm đầu tiên
 
 Theo đúng thứ tự, tất cả nằm trong tuần G0 và không cần chờ nhau:
 
-1. **Gửi email xin phép 3–5 hãng thiết bị** — không cần kỹ sư, ROI cao nhất trong cả dự án. Nếu một hãng đồng ý, rủi ro pháp lý GĐ1 chuyển thành quy trình tuân thủ bình thường.
-2. **Dựng VideoLingo + VoxCPM2, chạy một video thật** với `target_language: 'Tiếng Việt'`. Nửa ngày, và nó trả lời cùng lúc: chất lượng dịch thuật ngữ kỹ thuật, chất lượng giọng Việt, và pipeline có chạy trên máy bạn không.
-3. **Test tải bằng yt-dlp trên URL thật của từng nền tảng** bạn định dùng. Douyin là chỗ dễ vỡ nhất; nếu nền tảng bạn trông cậy nhất không tải ổn định thì phải biết ở tuần 1, không phải tuần 6.
+1. **Chạy pipeline + VoxCPM2 trên một video thật thuộc phạm vi giấy phép sẵn có.** Việc này trả lời cùng lúc: chất lượng dịch thuật ngữ kỹ thuật, chất lượng giọng Việt, và pipeline có chạy trên máy bạn không.
+2. **Test tải bằng yt-dlp trên URL thật của từng nền tảng đã có giấy phép.** Douyin là chỗ dễ vỡ nhất; nếu nền tảng bạn trông cậy nhất không tải ổn định thì phải biết ở tuần 1, không phải tuần 6.
 
 ---
 
