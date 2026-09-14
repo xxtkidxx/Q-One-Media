@@ -43,6 +43,26 @@ def _say(msg: str = "") -> None:
     print(msg, flush=True)
 
 
+def _gpu_available() -> bool:
+    """Có torch + CUDA + whisperx + demucs hay không.
+
+    Quyết định bước nào chạy thật: trong container **api** thì không có gì, trong
+    container **worker** có đủ. Script tự phát hiện thay vì bắt người chạy truyền cờ,
+    và **nói rõ** đường nào đã chạy — một script demo im lặng về việc nó giả bao
+    nhiêu phần là script vô dụng.
+    """
+    try:
+        import torch
+
+        if not torch.cuda.is_available():
+            return False
+        import demucs  # noqa: F401
+        import whisperx  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 def main() -> int:
     if not os.environ.get("DATABASE_URL"):
         _say("Thiếu DATABASE_URL — chạy trong container: make smoke")
@@ -71,6 +91,16 @@ def main() -> int:
     settings = get_settings()
     clock = SystemClock()
     uow = get_uow()
+    has_gpu = _gpu_available()
+    _say(
+        "Môi trường: "
+        + (
+            "worker có GPU — Demucs và alignment chạy THẬT"
+            if has_gpu
+            else "không có GPU — Demucs và alignment dùng dữ liệu mẫu"
+        )
+    )
+    _say()
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     url = f"https://nmi.vn/demo/smoke-{stamp}"
 
@@ -146,7 +176,24 @@ def main() -> int:
             duration_sec=40,
             aspect_ratio=AspectRatio(16, 9),
         )
-        # Demucs GIẢ: không tách stem, nên bước trộn audio sẽ dùng giọng trần.
+        uow.items.update(item)
+        uow.commit()
+
+    # ---- 4b. Tách stem: THẬT nếu có GPU ----
+    work = transcript_dir(settings.media_root, item_id)
+    background: Path | None = None
+    if has_gpu:
+        _say("     Demucs tách stem (THẬT) — bỏ giọng, giữ tiếng máy …")
+        from src.infrastructure.asr.demucs import separate
+
+        audio = ffmpeg.extract_audio(source_video, work / "source_audio.wav")
+        stems = separate(audio, work)
+        background = stems.background
+    else:
+        _say("     (bỏ qua Demucs — không có GPU, video sẽ không có nền tiếng máy)")
+
+    with uow:
+        item = uow.items.get(item_id)
         item.mark_separated()
         item.mark_transcribed()
         item.send_transcript_to_review()
@@ -195,15 +242,26 @@ def main() -> int:
         return 1
     _say(f"     audio {outcome.audio_sec:.1f}s cho khung 30.0s")
 
-    # ---- 6. Forced alignment (GIẢ: chia đều theo ký tự) ----
-    _say("7/8  Chia dòng phụ đề theo tỷ lệ ký tự (thay cho forced alignment) …")
-    sentences = [s.strip() for s in SCRIPT_VI.split(". ") if s.strip()]
-    total_chars = sum(len(s) for s in sentences)
-    cues, cursor = [], 0.0
-    for sentence in sentences:
-        span = outcome.audio_sec * len(sentence) / total_chars
-        cues.append((cursor, cursor + span, sentence.rstrip(".") + "."))
-        cursor += span
+    # ---- 6. Forced alignment ----
+    with uow:
+        voice_path = settings.paths.absolute(uow.items.get(item_id).path_work.relative_path)
+
+    if has_gpu:
+        _say("7/8  Forced alignment bằng WhisperX (THẬT) — kịch bản đã biết ↔ audio TTS …")
+        from src.infrastructure.asr.whisperx import align_known_text, group_words_into_cues
+
+        words = align_known_text(voice_path, SCRIPT_VI, language="vi")
+        cues = group_words_into_cues(words)
+        _say(f"     {len(words)} từ → {len(cues)} dòng phụ đề")
+    else:
+        _say("7/8  Chia dòng phụ đề theo tỷ lệ ký tự (KHÔNG phải forced alignment) …")
+        sentences = [s.strip() for s in SCRIPT_VI.split(". ") if s.strip()]
+        total_chars = sum(len(s) for s in sentences)
+        cues, cursor = [], 0.0
+        for sentence in sentences:
+            span = outcome.audio_sec * len(sentence) / total_chars
+            cues.append((cursor, cursor + span, sentence.rstrip(".") + "."))
+            cursor += span
 
     # Máy trạng thái không cho trộn audio trước khi gióng — đúng, vì phụ đề phải
     # có timing mới burn được. Ghi nhận bước gióng (dù ở đây là gióng giả).
@@ -216,17 +274,14 @@ def main() -> int:
     # ---- 7. Render (THẬT: ffmpeg + Easel) ----
     _say("8/8  Render: cắt → reframe blur → trộn → burn phụ đề → loudnorm …")
     with uow:
-        item = uow.items.get(item_id)
-        voice = settings.paths.absolute(item.path_work.relative_path)
-        segment = item.segment
-    work = transcript_dir(settings.media_root, item_id)
+        segment = uow.items.get(item_id).segment
     output = settings.paths.output / f"item-{item_id:08d}" / "final.mp4"
 
     FfmpegRenderer().render(
         RenderRequest(
             source_video=source_video,
-            voice_audio=voice,
-            background_audio=None,  # Demucs giả → không có nền tiếng máy
+            voice_audio=voice_path,
+            background_audio=background,
             subtitle_cues=cues,
             start_sec=segment.start_sec,
             end_sec=segment.end_sec,
@@ -256,8 +311,13 @@ def main() -> int:
     _say(f"  Mở để duyệt: http://localhost:{os.environ.get('API_PORT', '8000')}"
          f"/web/review/{item_id}")
     _say()
-    _say("Nhắc lại: timing phụ đề ở đây chia đều, KHÔNG phải forced alignment.")
-    _say("Nền tiếng máy cũng không có vì Demucs chưa chạy. Cả hai cần image worker.")
+    if has_gpu:
+        _say("Đã chạy THẬT: Demucs tách stem, WhisperX forced alignment, VoxCPM2/edge-tts,")
+        _say("toàn bộ chuỗi ffmpeg. Còn giả: bước tải (dùng lavfi) và hai bước LLM")
+        _say("(chọn đoạn, viết kịch bản) — hai bước đó cần ANTHROPIC_API_KEY.")
+    else:
+        _say("Nhắc lại: timing phụ đề ở đây chia đều, KHÔNG phải forced alignment, và")
+        _say("không có nền tiếng máy vì Demucs chưa chạy. Cả hai cần container worker.")
     return 0
 
 
