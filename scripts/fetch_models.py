@@ -23,7 +23,7 @@ PLAN = [
     ("WhisperX large-v3 (nhận dạng lời nguồn)", "~3 GB"),
     ("WhisperX align vi (forced alignment tiếng Việt)", "~1 GB"),
     ("Demucs htdemucs (tách giọng khỏi tiếng máy)", "~300 MB"),
-    ("VoxCPM2 (giọng tiếng Việt)", "~5 GB"),
+    ("VoxCPM2 openbmb/VoxCPM2 (giọng tiếng Việt)", "~5 GB"),
 ]
 
 
@@ -54,13 +54,20 @@ def fetch_demucs() -> None:
 
 
 def fetch_voxcpm() -> None:
-    _say("→ VoxCPM2 …")
+    """Tải **VoxCPM2**, không phải VoxCPM-0.5B.
+
+    Bản 0.5B chỉ có ``en`` và ``zh``; chỉ VoxCPM2 có ``vi``. Để thư viện tự chọn
+    là rủi ro tải đúng model không dùng được cho dự án này.
+    """
+    from src.infrastructure.tts.voxcpm import DEFAULT_MODEL_ID
+
+    _say(f"→ {DEFAULT_MODEL_ID} …")
     try:
         from voxcpm import VoxCPM
     except ImportError:
         _say("  (bỏ qua: chưa cài voxcpm trong image này)")
         return
-    VoxCPM.from_pretrained()
+    VoxCPM.from_pretrained(DEFAULT_MODEL_ID)
 
 
 def main() -> int:

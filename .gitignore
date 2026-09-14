@@ -87,3 +87,6 @@ desktop.ini
 
 # Thu muc scratch cua agent
 .scratch/
+
+# __pycache__ cua host lan vao khi chay pytest ngoai container
+**/__pycache__/

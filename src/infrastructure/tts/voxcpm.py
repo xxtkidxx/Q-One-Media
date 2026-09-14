@@ -22,6 +22,12 @@ from src.shared.logging import get_logger
 
 log = get_logger(__name__)
 
+# Model ID **tường minh**, không dùng mặc định của thư viện. Lý do cụ thể:
+# ``openbmb/VoxCPM-0.5B`` chỉ có ``en`` và ``zh`` — **không có tiếng Việt**.
+# Chỉ ``openbmb/VoxCPM2`` có ``vi`` (đã xác minh trên HF: license apache-2.0,
+# 30 ngôn ngữ gồm vi). Để thư viện tự chọn là rủi ro nạp đúng model không dùng được.
+DEFAULT_MODEL_ID = "openbmb/VoxCPM2"
+
 _model: Any = None
 
 
@@ -35,7 +41,7 @@ class ModelUnavailable(RuntimeError):
     retryable = False
 
 
-def _load_model(model_dir: Path | None) -> Any:
+def _load_model(model_id: str) -> Any:
     global _model
     if _model is not None:
         return _model
@@ -45,12 +51,14 @@ def _load_model(model_dir: Path | None) -> Any:
         raise ModelUnavailable(
             "chưa cài voxcpm — chỉ có trong image worker, không có trong image api"
         ) from exc
-    log.info("voxcpm.load.start", model_dir=str(model_dir) if model_dir else "default")
+    log.info("voxcpm.load.start", model_id=model_id)
     try:
-        _model = VoxCPM.from_pretrained(str(model_dir)) if model_dir else VoxCPM.from_pretrained()
+        _model = VoxCPM.from_pretrained(model_id)
     except Exception as exc:
-        raise ModelUnavailable(f"nạp VoxCPM2 thất bại: {type(exc).__name__}: {exc}") from exc
-    log.info("voxcpm.load.done")
+        raise ModelUnavailable(
+            f"nạp {model_id} thất bại: {type(exc).__name__}: {exc}"
+        ) from exc
+    log.info("voxcpm.load.done", model_id=model_id)
     return _model
 
 
@@ -93,11 +101,11 @@ class VoxCpmSynthesizer:
     def __init__(
         self,
         *,
-        model_dir: Path | None = None,
+        model_id: str = DEFAULT_MODEL_ID,
         default_voice_ref: Path | None = None,
         measured_syllables_per_sec: float | None = None,
     ) -> None:
-        self._model_dir = model_dir
+        self._model_id = model_id
         self._default_voice_ref = default_voice_ref
         # Cố tình để None nếu chưa đo. Các con số 5,28–6 âm tiết/giây tìm được
         # trên mạng không thống nhất; đặc tả F2.3 yêu cầu tự đo giọng đang dùng
@@ -125,7 +133,7 @@ class VoxCpmSynthesizer:
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         ref = voice_ref or self._default_voice_ref
-        model = _load_model(self._model_dir)
+        model = _load_model(self._model_id)
         log.info(
             "voxcpm.synthesize",
             syllables=count_syllables(text),

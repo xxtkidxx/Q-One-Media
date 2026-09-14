@@ -211,6 +211,8 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D37 | Mọi biến container cần phải khai trong `x-common-env` của compose | `--env-file` chỉ thay biến trong *chính file compose*, không tự truyền vào container. Thiếu một dòng là code đọc ra `None` và một guard nổ giữa đường — đã xảy ra với `TTS_SYLLABLES_PER_SEC` |
 | D38 | **Chỉ hai file compose**, mỗi file chạy độc lập — bỏ file base | Ba file với override lồng nhau khó đọc và khó đoán: phải ghép trong đầu mới biết một service thật ra chạy với cấu hình gì. Giá phải trả là lặp phần `x-env` giữa hai file; đổi lại mỗi file đọc một lượt là hiểu hết |
 | D39 | Hardcode `dev`/`prod` trong đường dẫn thay vì `${APP_ENV}` | File đã tên là dev thì `${APP_ENV}` chỉ là một lớp gián tiếp không thêm thông tin, và là một chỗ nữa để đặt sai |
+| D40 | Pin **`voxcpm==2.0.3`**, và chỉ định model **`openbmb/VoxCPM2`** tường minh | `voxcpm==0.5.0` trong `docker/worker/requirements.txt` **không tồn tại** — số đó do tôi đặt sai, lẫn tên model (VoxCPM-0.5B) thành số phiên bản package. Đặc tả ghi đúng `openbmb/VoxCPM2`. Đã xác minh lại hôm nay: repo Apache-2.0 37.149★, model card `license: apache-2.0` và có `vi` trong 30 ngôn ngữ. Và `VoxCPM-0.5B` chỉ có `en`/`zh`, **không có tiếng Việt**; chỉ `VoxCPM2` có `vi`. Để thư viện tự chọn là rủi ro nạp đúng model không dùng được |
+| D41 | Worker bootstrap pip cho **đúng Python 3.11** bằng `get-pip.py` | Ubuntu 22.04 có `python3` = 3.10; gói `python3-pip` cài pip cho 3.10, nên mọi thư viện vào 3.10 rồi symlink `python` sang 3.11 và 3.11 không thấy gì. Build vẫn báo thành công. Code cần 3.11 thật (`StrEnum`, `datetime.UTC`). Đã thêm bước kiểm ngay trong Dockerfile |
 
 ---
 

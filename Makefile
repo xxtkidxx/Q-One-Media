@@ -8,13 +8,13 @@ PROD    := -f docker/docker-compose.prod.yml --env-file .env.prod
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-up dev-down dev-logs dev-build prod-up prod-down prod-logs prod-build \
-        test test-int test-all lint shell psql fonts models speech-rate corpus glossary-load smoke status clean-work \n        migrate migrate-prod migrate-rev migrate-history
+        test test-int test-gpu test-all lint shell psql fonts models speech-rate corpus glossary-load smoke status clean-work \n        migrate migrate-prod migrate-rev migrate-history
 
 help:
 	@echo "DEV : dev-up dev-down dev-logs dev-build"
 	@echo "PROD: prod-up prod-down prod-logs prod-build"
 	@echo "DB  : migrate migrate-prod migrate-rev migrate-history"
-	@echo "KHAC: test test-int test-all lint fonts speech-rate corpus glossary-load shell psql fonts models speech-rate corpus glossary-load smoke status clean-work \n        migrate migrate-prod migrate-rev migrate-history"
+	@echo "KHAC: test test-int test-gpu test-all lint fonts speech-rate corpus glossary-load shell psql fonts models speech-rate corpus glossary-load smoke status clean-work \n        migrate migrate-prod migrate-rev migrate-history"
 
 # ---------------- DEV ----------------
 dev-up:
@@ -53,6 +53,10 @@ test:
 # Test tích hợp: cần postgres chạy. Mapper là chỗ duy nhất mất dữ liệu im lặng được.
 test-int:
 	$(DC) $(DEV) run --rm api pytest tests/integration -q -m integration
+
+# Test cần GPU và model thật. Chạy trong worker, không phải api.
+test-gpu:
+	$(DC) $(DEV) run --rm worker pytest tests/integration/test_gpu_models.py -q -m gpu -s
 
 # Chỉ chạy khi chuẩn bị merge hoặc được yêu cầu
 test-all:

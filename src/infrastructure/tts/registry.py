@@ -19,8 +19,9 @@ def build_synthesizer(settings: Settings) -> SpeechSynthesizer:
     if engine == "voxcpm":
         from src.infrastructure.tts.voxcpm import VoxCpmSynthesizer
 
+        # Không truyền model_id: mặc định của adapter là openbmb/VoxCPM2, model
+        # duy nhất có tiếng Việt. HF_HOME trong compose đã trỏ cache vào /models.
         return VoxCpmSynthesizer(
-            model_dir=settings.model_cache / "voxcpm",
             default_voice_ref=Path(settings.tts.voice_ref) if settings.tts.voice_ref else None,
             measured_syllables_per_sec=settings.tts.measured_rate,
         )
