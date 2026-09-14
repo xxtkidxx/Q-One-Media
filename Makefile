@@ -8,13 +8,13 @@ PROD    := $(BASE) -f docker/docker-compose.prod.yml --env-file .env.prod
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-up dev-down dev-logs dev-build prod-up prod-down prod-logs prod-build \
-        test test-int test-all lint shell psql fonts models speech-rate status clean-work \n        migrate migrate-prod migrate-rev migrate-history
+        test test-int test-all lint shell psql fonts models speech-rate corpus glossary-load status clean-work \n        migrate migrate-prod migrate-rev migrate-history
 
 help:
 	@echo "DEV : dev-up dev-down dev-logs dev-build"
 	@echo "PROD: prod-up prod-down prod-logs prod-build"
 	@echo "DB  : migrate migrate-prod migrate-rev migrate-history"
-	@echo "KHAC: test test-int test-all lint fonts speech-rate shell psql fonts models speech-rate status clean-work \n        migrate migrate-prod migrate-rev migrate-history"
+	@echo "KHAC: test test-int test-all lint fonts speech-rate corpus glossary-load shell psql fonts models speech-rate corpus glossary-load status clean-work \n        migrate migrate-prod migrate-rev migrate-history"
 
 # ---------------- DEV ----------------
 dev-up:
@@ -83,6 +83,16 @@ shell:
 
 psql:
 	$(DC) $(DEV) exec postgres psql -U $${POSTGRES_USER:-qone} -d $${POSTGRES_DB:-qone}
+
+# Corpus nmi.vn → bảng thuật ngữ (G1.3). nmi.vn là site của chính NMI, có mặt ở
+# đây vì taxonomy và vì cách NMI đã gọi thuật ngữ bằng tiếng Việt — không phải
+# làm nguồn nội dung video.
+corpus:
+	python scripts/nmi_corpus.py fetch
+	python scripts/nmi_corpus.py terms
+
+glossary-load:
+	$(DC) $(DEV) run --rm api python scripts/load_glossary.py
 
 # Đo tốc độ đọc thật của giọng đang dùng → TTS_SYLLABLES_PER_SEC (G0.7).
 # Đo được 3,52 âm tiết/giây với edge-tts; các nguồn trên mạng ghi 5,28–6.

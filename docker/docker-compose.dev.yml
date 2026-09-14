@@ -19,6 +19,7 @@ services:
       - ../pytest.ini:/app/pytest.ini:ro
       - ../ruff.toml:/app/ruff.toml:ro
       - ../scripts:/app/scripts:ro
+      - ../research:/app/research:ro
       - ../alembic:/app/alembic
       - ../alembic.ini:/app/alembic.ini:ro
       - ../data/dev/media:/data/media
@@ -42,6 +43,7 @@ services:
       - ../pytest.ini:/app/pytest.ini:ro
       - ../ruff.toml:/app/ruff.toml:ro
       - ../scripts:/app/scripts:ro
+      - ../research:/app/research:ro
       - ../alembic:/app/alembic
       - ../alembic.ini:/app/alembic.ini:ro
       - ../data/dev/media:/data/media

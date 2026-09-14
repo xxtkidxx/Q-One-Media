@@ -60,6 +60,13 @@ node_modules/
 !tests/fixtures/**
 
 # ============================================================
+# Corpus nmi.vn — tên file chứa hash nội dung nên đổi mỗi lần site build lại.
+# Tải lại bằng: make corpus. Giữ README và file thuật ngữ đã duyệt.
+# ============================================================
+research/nmi-scan/*.js
+research/nmi-scan/index.html
+
+# ============================================================
 # Font tải về — không commit nhị phân, tải lại bằng: make fonts
 # (Be Vietnam Pro license OFL nên tải lại lúc nào cũng được)
 # ============================================================

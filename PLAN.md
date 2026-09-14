@@ -15,8 +15,8 @@
 | Mốc hiện tại | **G2 + GW xong về code** · G0 vẫn mở và giờ đã thành đường găng |
 | Tiến độ tổng | ~75% code Giai đoạn 1; các bước cần GPU/credential chưa chạy thật |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
-| Đã kiểm chứng | **200 unit + 43 integration** test xanh, ruff sạch; license gate chạy đầu-cuối qua HTTP và qua form web; render chạy với ffmpeg thật; **sinh được giọng tiếng Việt thật và đo được tốc độ đọc** |
-| Việc tiếp theo | **G1.3** rút glossary từ corpus nmi.vn; rồi **G0.3** test yt-dlp trên URL thật để chạy một video đầu-cuối (đã có đường TTS không cần GPU) |
+| Đã kiểm chứng | **214 unit + 43 integration** test xanh, ruff sạch; license gate chạy đầu-cuối qua HTTP và qua form web; render chạy với ffmpeg thật; sinh được giọng tiếng Việt thật; **77 thuật ngữ thật đã nạp vào `glossary`** |
+| Việc tiếp theo | **G0.3** test `yt-dlp` trên URL thật từng nền tảng → chạy một video đầu-cuối bằng engine `edge` (không cần GPU). Cần bạn cho một URL nguồn có quyền |
 
 ---
 
@@ -68,7 +68,7 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 
 - [x] **G1.1** Vendor `vendor/easel/` (3 script + LICENSE + ORIGIN.md). **Không vendor VideoLingo** — xem D23
 - [ ] **G1.2** Làm 5 video bằng tay, **mỗi nền tảng ít nhất 1**
-- [ ] **G1.3** Rút glossary EN↔VI và ZH↔VI từ corpus `research/nmi-scan/` → bảng `glossary`
+- [~] **G1.3** `make corpus` + `make glossary-load`. **77 thuật ngữ EN đã nạp** từ corpus thật (PLC 107×, MES 63×, SPC 42×, Gage R&R 22×, Cpk 15×, OPC UA 14×) — tất cả là *giữ nguyên tiếng Anh*. Còn thiếu: cặp có bản tiếng Việt, và chiều ZH↔VI
 - [ ] **G1.4** Ghi lại thời gian thật mỗi video theo nền tảng và ngôn ngữ nguồn
 - [ ] **G1.5** Chốt style phụ đề ASS (font đã test glyph, palette `#081120`)
 
@@ -205,6 +205,9 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D31 | Thêm engine TTS `edge` **chỉ cho dev**, chặn ở prod bằng hai lớp | Cho chạy toàn chuỗi không cần GPU. Nhưng `edge-tts` là client *không chính thức* của dịch vụ Microsoft Edge nên điều khoản thương mại không rõ — dự án đã bỏ OmniVoice vì đúng loại vấn đề đó (CC-BY-NC), giữ một chuẩn thì phải giữ cả ở đây |
 | D32 | `edge-tts` **không pin phiên bản cứng** (`>=7.2.8`) | Bản 7.0.2 bị HTTP 403 ở handshake trong khi 7.2.8 chạy được: client không chính thức phải chạy theo thay đổi của Microsoft. Đây cũng là lý do kỹ thuật để không dùng ở production |
 | D33 | Font tải bằng script, **không commit `.ttf`** | Be Vietnam Pro license OFL nên tải lại lúc nào cũng được; tải trong Dockerfile thì build phụ thuộc mạng và không lặp lại được |
+| D34 | Glossary: **`term_vi` để trống nghĩa là "giữ nguyên tiếng Anh"** | Corpus nmi.vn cho thấy NMI viết Cpk, MES, OPC UA, PLC nguyên dạng trong câu tiếng Việt vì người trong ngành gọi vậy. Dịch chúng ra làm nội dung *khó* đọc hơn với đúng nhóm cần đọc |
+| D35 | Thuật ngữ rút tự động là **ứng viên cần người duyệt**, không nạp thẳng | Một thuật ngữ dịch sai đi vào **mọi** video sau đó. Script ghi ra TSV, người điền `term_vi`, rồi `make glossary-load` |
+| D36 | `research/nmi-scan/` tái lập bằng script, **không commit bundle `.js`** | Tên file chứa hash nội dung nên đổi mỗi lần nmi.vn build lại — commit vào repo là commit một thứ hết hạn |
 
 ---
 
@@ -229,3 +232,4 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | 13/09/2026 | Code lõi: domain 4 bounded context → application use case → infrastructure Postgres → FastAPI + worker. 4 commit. Bịt lỗ xác minh chủ sở hữu trong license gate. 112 unit + 12 integration test xanh. Sửa 4 bug do test bắt được (xem nhật ký commit) |
 | 14/09/2026 | Alembic thành nguồn duy nhất của schema · vendor Easel · tầng media (ffmpeg + ASS + render) · TTS + ngân sách âm tiết · ASR/Demucs/alignment · LLM chọn đoạn + viết kịch bản · publish YouTube/Facebook · mặt tiền web nội bộ · nối dây worker. 191 unit + 43 integration test |
 | 14/09/2026 | Viết nốt 4 script vận hành (`fetch_models`, `fetch_fonts`, `measure_speech_rate`, `youtube_authorize`) · G0.8 + G0.11 xong bằng kiểm chứng thật · engine `edge` cho phép chạy toàn chuỗi **không cần GPU** · đo được tốc độ đọc 3,54 âm tiết/giây |
+| 14/09/2026 | G1.3: tái lập `research/nmi-scan/` bằng script (tham chiếu treo trong tài liệu — thư mục chưa từng tồn tại), rút 77 thuật ngữ từ corpus thật và nạp vào bảng `glossary` |
