@@ -19,6 +19,7 @@ from src.domain.production.value_objects import (
     SpeechRate,
     SyllableBudget,
 )
+from src.shared.paths import MediaPaths
 
 TRANSCRIPT_FILE = "transcript.json"
 PROPOSALS_FILE = "segment_proposals.json"
@@ -33,7 +34,14 @@ class TranscriptMissing(DomainError):
 
 
 def transcript_dir(media_root: Path, item_id: int) -> Path:
-    return media_root / "work" / f"item-{item_id:08d}"
+    """Thư mục làm việc của một item.
+
+    Uỷ quyền cho ``MediaPaths.item_work_dir`` thay vì tự ghép chuỗi: hai công thức
+    đặt tên song song là hai chỗ có thể lệch nhau (số chữ số padding, tên thư mục),
+    và khi lệch thì bước này ghi file vào một chỗ, bước sau đi tìm ở chỗ khác — cả
+    hai đều "thành công", pipeline thì đứt.
+    """
+    return MediaPaths(media_root).item_work_dir(item_id)
 
 
 def save_transcript(media_root: Path, item_id: int, *, text: str, segments: list[dict]) -> Path:
