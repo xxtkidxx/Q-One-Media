@@ -15,8 +15,8 @@
 | Mốc hiện tại | **G2 + GW xong về code** · G0 vẫn mở và giờ đã thành đường găng |
 | Tiến độ tổng | ~75% code Giai đoạn 1; các bước cần GPU/credential chưa chạy thật |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
-| Đã kiểm chứng | **227 unit + 43 integration** test xanh, ruff sạch; **`make smoke` ra video 9:16 thật có phụ đề tiếng Việt, phát được trong `/web/review`**; 77 thuật ngữ đã nạp vào `glossary`; **image worker chạy được model thật trên GPU** (Python 3.11 bản chính thức, torch 2.6+cu124, ctranslate2 4.8.2 khớp cuDNN 9) |
-| Việc tiếp theo | Chạy `make test-gpu` xanh toàn bộ: Demucs + Whisper + gióng + VoxCPM2 tuần tự trên RTX 3070 8 GB, đo VRAM từng bước. Cần bạn: URL nguồn có quyền, và `ANTHROPIC_API_KEY` |
+| Đã kiểm chứng | **226 unit + 43 integration + 8 GPU** test xanh, ruff sạch; **`make smoke` ra video 9:16 thật có phụ đề tiếng Việt, phát được trong `/web/review`**; 77 thuật ngữ đã nạp vào `glossary`; **image worker chạy được model thật trên GPU** (Python 3.11 bản chính thức, torch 2.6+cu124, ctranslate2 4.8.2 khớp cuDNN 9) |
+| Việc tiếp theo | **Chỉ còn chờ bạn**: `ANTHROPIC_API_KEY` cho hai bước LLM (chọn đoạn, viết kịch bản) và URL nguồn có quyền để test bước tải thật. Mọi thứ khác trong chuỗi đã chạy được với model thật |
 
 ---
 
