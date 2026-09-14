@@ -55,6 +55,27 @@ kiểm được font có đủ dấu tiếng Việt hay không.
 
 ---
 
+## VieNeu-TTS (model, không sửa mã)
+
+| | |
+|---|---|
+| Weights | https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo |
+| Base model | https://huggingface.co/neuphonic/neutts-air |
+| Codec | https://huggingface.co/neuphonic/neucodec |
+| Gói PyPI | `vieneu` |
+| Ngày kiểm license | 2026-09-15 |
+| License | Apache License 2.0 — cả ba model card; NeuCodec ghi rõ "Commercial use permitted", dữ liệu huấn luyện CC-BY-4.0/CC0 |
+
+Dùng **nguyên trạng qua API công khai của gói `vieneu`**, không sao chép và không
+sửa mã nguồn — nên nghĩa vụ ở đây là ghi xuất xứ, không phải kê khai thay đổi.
+Model card của v3 Turbo nói rõ audio sinh ra dùng được cho nội dung thương mại.
+
+Ghi ở đây vì quy tắc của dự án là **kiểm license của weights trên model card**,
+không tin license của code: đã hai lần suýt lọt model NonCommercial vào đường
+sản xuất (OmniVoice CC-BY-NC và model gióng `vi` của WhisperX cc-by-nc-4.0).
+
+---
+
 ## Toàn văn Apache License 2.0
 
 ```

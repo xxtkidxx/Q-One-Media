@@ -54,3 +54,10 @@ anthropic==0.42.0
 # (WSServerHandshakeError) vao 14/09/2026 trong khi 7.2.8 chay duoc.
 # Day chinh la ly do ky thuat de KHONG dung no o production.
 edge-tts>=7.2.8
+
+# --- VieNeu-TTS: 20 giong Viet dung san, Apache-2.0 ---
+# Weights (pnnbao-ump/VieNeu-TTS-v3-Turbo), base (neuphonic/neutts-air) va codec
+# (neuphonic/neucodec) deu apache-2.0 - da kiem TREN MODEL CARD ngay 15/09/2026,
+# khong tin license cua code. Chay duoc hoan toan tren CPU qua ONNX Runtime nen
+# khong tranh VRAM voi Whisper/VoxCPM2 tren card 8 GB (D54).
+vieneu>=0.3

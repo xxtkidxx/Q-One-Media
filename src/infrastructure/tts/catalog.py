@@ -8,21 +8,26 @@ giọng. Vì vậy id giọng đi theo item vào DB, còn ``TTS_ENGINE`` chỉ c
 Id có dạng ``engine:tên`` để một chuỗi nói đủ cả engine lẫn giọng — không cần
 bảng tra thứ hai, và một id cũ trong DB vẫn đọc được sau khi thêm engine mới.
 
-Ba nguồn giọng, đúng theo thứ tự ưu tiên của dự án:
+Bốn nguồn giọng, đúng theo thứ tự ưu tiên của dự án:
 
-- **VoxCPM2** (Apache-2.0) — giọng sản xuất. Clone từ audio mẫu, nên "giọng" ở
-  đây là file mẫu: thả ``.wav`` vào ``media/voices/`` là nó hiện ra trong danh
-  sách. Kèm file ``.txt`` cùng tên chứa lời đọc của mẫu thì clone khá hơn rõ rệt
-  (model gióng được âm với chữ thay vì chỉ bắt chước âm sắc).
-- **FPT.AI** (hợp đồng thương mại) — dự phòng khi VoxCPM2 không đạt (G0.5).
+- **VoxCPM2** (Apache-2.0) — clone giọng từ audio mẫu, nên "giọng" ở đây là file
+  mẫu: thả ``.wav`` vào ``media/voices/`` là nó hiện ra trong danh sách. Kèm file
+  ``.txt`` cùng tên chứa lời đọc của mẫu thì clone khá hơn rõ rệt (model gióng
+  được âm với chữ thay vì chỉ bắt chước âm sắc).
+- **VieNeu-TTS** (Apache-2.0, weights + codec đều đã kiểm trên model card) — 20
+  giọng **dựng sẵn** đủ Bắc/Trung/Nam, nam và nữ. Đây là nguồn giọng dùng được
+  ngay mà không cần thu mẫu, và chạy trên CPU nên không tranh VRAM với Whisper.
+- **FPT.AI** (hợp đồng thương mại) — dự phòng khi hai engine trên không đạt (G0.5).
 - **edge** — **chỉ dev**, để chạy toàn chuỗi khi không có GPU. Bị chặn ở prod.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib.util import find_spec
 from pathlib import Path
 
+from src.infrastructure.tts.vieneu import PRESETS as VIENEU_PRESETS
 from src.shared.config import ConfigError, Settings
 
 VOICE_DIR_NAME = "voices"
@@ -60,6 +65,11 @@ FPTAI_VOICES: tuple[tuple[str, str, str, str], ...] = (
     ("linhsan", "Linh San", "nữ", "Nam"),
     ("minhquang", "Minh Quang", "nam", "Nam"),
 )
+
+# 20 giọng dựng sẵn của VieNeu-TTS v3 Turbo — miễn phí, Apache-2.0, model card
+# cho phép dùng thương mại (kiểm ngày 15/09/2026). Đây là nguồn giọng "dùng được
+# ngay" lớn nhất của dự án: VoxCPM2 clone tốt nhưng phải có audio mẫu trước.
+VIENEU_AVAILABLE_NOTE = "Cần cài gói `vieneu` trong image worker"
 
 # Hai giọng edge đã xác minh ngày 14/09/2026 bằng ``edge_tts.list_voices()`` —
 # đúng hai, không phải "một vài" (G0.11).
@@ -119,6 +129,20 @@ def list_voices(settings: Settings) -> list[VoiceOption]:
                 )
             )
 
+    has_vieneu = find_spec("vieneu") is not None
+    for slug, name, gender, region in VIENEU_PRESETS:
+        options.append(
+            VoiceOption(
+                id=f"vieneu:{slug}",
+                label=f"VieNeu — {name}",
+                engine="vieneu",
+                gender=gender,
+                region=region,
+                available=has_vieneu,
+                note="" if has_vieneu else VIENEU_AVAILABLE_NOTE,
+            )
+        )
+
     has_fptai = bool(settings.tts.fptai_api_key)
     for name, label, gender, region in FPTAI_VOICES:
         options.append(
@@ -162,6 +186,8 @@ def default_voice_id(settings: Settings) -> str:
     engine = settings.tts.engine.strip().lower()
     if engine == "voxcpm":
         return "voxcpm:default"
+    if engine == "vieneu":
+        return f"vieneu:{VIENEU_PRESETS[0][0]}"
     if engine == "fptai":
         return "fptai:banmai"
     if engine == "edge":

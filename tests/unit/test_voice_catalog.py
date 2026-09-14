@@ -38,10 +38,10 @@ def _settings(tmp_path: Path, *, env="dev", **tts_kw) -> Settings:
     )
 
 
-def test_danh_muc_co_du_ba_engine_va_noi_ro_cai_nao_chua_dung_duoc(tmp_path):
+def test_danh_muc_co_du_bon_engine_va_noi_ro_cai_nao_chua_dung_duoc(tmp_path):
     voices = list_voices(_settings(tmp_path))
     by_engine = {voice.engine for voice in voices}
-    assert by_engine == {"voxcpm", "fptai", "edge"}
+    assert by_engine == {"voxcpm", "vieneu", "fptai", "edge"}
 
     fptai = [voice for voice in voices if voice.engine == "fptai"]
     assert len(fptai) == len(FPTAI_VOICES)
@@ -149,3 +149,51 @@ def test_chon_giong_fptai_thi_dung_dung_ten_giong(tmp_path, monkeypatch):
     monkeypatch.setattr(fptai_mod, "FptAiSynthesizer", FakeFpt)
     build_synthesizer_for("fptai:lannhi", settings)
     assert seen == ["lannhi"]
+
+
+# ---------------- VieNeu-TTS: 20 giọng dựng sẵn ----------------
+
+
+def test_vieneu_gop_du_20_giong_va_du_ba_mien(tmp_path):
+    """Nguồn giọng dùng-được-ngay lớn nhất: không cần thu mẫu như VoxCPM2."""
+    from src.infrastructure.tts.vieneu import PRESETS
+
+    voices = [v for v in list_voices(_settings(tmp_path)) if v.engine == "vieneu"]
+    assert len(voices) == len(PRESETS) == 20
+    assert {v.region for v in voices} == {"Bắc", "Trung", "Nam"}
+    assert {v.gender for v in voices} == {"nam", "nữ"}
+    assert all(v.id.startswith("vieneu:") for v in voices)
+
+
+def test_chua_cai_goi_vieneu_thi_giong_hien_kem_ly_do(tmp_path, monkeypatch):
+    import src.infrastructure.tts.catalog as catalog_mod
+
+    monkeypatch.setattr(catalog_mod, "find_spec", lambda name: None)
+    voices = [v for v in list_voices(_settings(tmp_path)) if v.engine == "vieneu"]
+    assert voices and all(not v.available for v in voices)
+    assert all("vieneu" in v.note for v in voices)
+
+
+def test_chon_giong_vieneu_thi_dung_dung_ten_trong_api(tmp_path, monkeypatch):
+    """Id dùng slug ASCII, còn API của thư viện nhận tên có dấu — map phải đúng."""
+    import src.infrastructure.tts.catalog as catalog_mod
+    import src.infrastructure.tts.vieneu as vieneu_mod
+
+    monkeypatch.setattr(catalog_mod, "find_spec", lambda name: object())
+    seen: list[str] = []
+
+    class FakeVieNeu:
+        def __init__(self, *, voice, measured_syllables_per_sec=None):
+            seen.append(voice)
+
+    monkeypatch.setattr(vieneu_mod, "VieNeuSynthesizer", FakeVieNeu)
+    build_synthesizer_for("vieneu:ngoc-tran", _settings(tmp_path))
+    assert seen == ["Ngọc Trân"]
+
+
+def test_vieneu_khong_clone_thi_noi_ra_chu_khong_doi_giong_am_tham(tmp_path, caplog):
+    from src.infrastructure.tts.vieneu import VieNeuRejected, VieNeuSynthesizer
+
+    synth = VieNeuSynthesizer(voice="Minh Đức")
+    with pytest.raises(VieNeuRejected):
+        synth.synthesize(text="   ", dest=tmp_path / "a.wav", clearance=None)

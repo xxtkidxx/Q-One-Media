@@ -43,6 +43,13 @@ def build_synthesizer_for(voice_id: str | None, settings: Settings) -> SpeechSyn
             default_voice_ref_text=option.ref_text,
             measured_syllables_per_sec=settings.tts.measured_rate,
         )
+    if option.engine == "vieneu":
+        from src.infrastructure.tts.vieneu import PRESET_BY_SLUG, VieNeuSynthesizer
+
+        return VieNeuSynthesizer(
+            voice=PRESET_BY_SLUG.get(option.name, option.name),
+            measured_syllables_per_sec=settings.tts.measured_rate,
+        )
     if option.engine == "fptai":
         from src.infrastructure.tts.fptai import FptAiSynthesizer
 
@@ -77,6 +84,11 @@ def build_synthesizer(settings: Settings) -> SpeechSynthesizer:
             default_voice_ref_text=settings.tts.voice_ref_text,
             measured_syllables_per_sec=settings.tts.measured_rate,
         )
+
+    if engine == "vieneu":
+        from src.infrastructure.tts.vieneu import VieNeuSynthesizer
+
+        return VieNeuSynthesizer(measured_syllables_per_sec=settings.tts.measured_rate)
 
     if engine == "fptai":
         from src.infrastructure.tts.fptai import FptAiSynthesizer
