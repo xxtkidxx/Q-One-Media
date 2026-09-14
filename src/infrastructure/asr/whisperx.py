@@ -54,6 +54,62 @@ class Transcript:
     segments: list[dict[str, Any]]
 
 
+_SAFE_GLOBALS_DONE = False
+
+
+def _allow_checkpoint_globals() -> None:
+    """Cho phép tường minh các class mà checkpoint của WhisperX/pyannote cần.
+
+    Vì sao cần: torch 2.6 đổi mặc định ``torch.load`` sang ``weights_only=True``.
+    Đổi đó là đúng về bảo mật, nhưng checkpoint VAD của pyannote (WhisperX dùng để
+    cắt đoạn có tiếng nói) chứa object ``omegaconf`` đã pickle, nên bị từ chối với
+    ``Unsupported global: omegaconf.listconfig.ListConfig``.
+
+    Hai cách sửa, và ta chọn cách hẹp hơn:
+
+    - ``weights_only=False`` — tắt hẳn kiểm tra cho **mọi** lần load. Quá rộng.
+    - allowlist đúng những class cần — chỉ mở đúng phần cần mở.
+
+    Mức rủi ro còn lại chấp nhận được vì model đến từ **id repo đã pin** trong
+    ``scripts/fetch_models.py`` và nằm trong cache local ``data/models``, không phải
+    checkpoint tuỳ ý người dùng nạp vào. Nếu về sau cho phép người dùng trỏ tới
+    checkpoint của họ thì phải xem lại chỗ này.
+    """
+    global _SAFE_GLOBALS_DONE
+    if _SAFE_GLOBALS_DONE:
+        return
+    try:
+        import torch
+    except ImportError:
+        return
+
+    allow: list = []
+    try:
+        from omegaconf.base import ContainerMetadata, Metadata
+        from omegaconf.dictconfig import DictConfig
+        from omegaconf.listconfig import ListConfig
+        from omegaconf.nodes import AnyNode
+
+        allow += [ListConfig, DictConfig, ContainerMetadata, Metadata, AnyNode]
+    except ImportError:
+        log.warning("whisperx.safe_globals.no_omegaconf")
+
+    # Checkpoint pyannote cũng chứa các kiểu chuẩn này bên trong cấu hình.
+    from collections import defaultdict
+    from typing import Any as _Any
+
+    allow += [defaultdict, dict, list, _Any]
+
+    try:
+        torch.serialization.add_safe_globals(allow)
+        _SAFE_GLOBALS_DONE = True
+        log.info("whisperx.safe_globals.added", count=len(allow))
+    except AttributeError:
+        # torch < 2.4 không có API này; ở đó weights_only chưa phải mặc định nên
+        # cũng không cần.
+        _SAFE_GLOBALS_DONE = True
+
+
 def _device_and_compute() -> tuple[str, str]:
     try:
         import torch
@@ -89,6 +145,7 @@ def transcribe(
     except ImportError as exc:
         raise WhisperUnavailable("chưa cài whisperx — chỉ có trong image worker") from exc
 
+    _allow_checkpoint_globals()
     device, compute_type = _device_and_compute()
     log.info("whisperx.transcribe.start", language=language, model=model_name, device=device)
     try:
@@ -128,6 +185,7 @@ def align_known_text(
     if not text.strip():
         raise AsrFailed("không gióng được chuỗi rỗng")
 
+    _allow_checkpoint_globals()
     device, _ = _device_and_compute()
     log.info("whisperx.align.start", language=language, chars=len(text))
     try:
