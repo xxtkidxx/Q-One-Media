@@ -11,11 +11,25 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # ffmpeg: bắt buộc. fonts-*: cần cho burn phụ đề tiếng Việt (bẫy glyph U+1Exx,
 # xem docs/phuong-an-cuoi-cung.md mục F2.2). libass đi kèm ffmpeg của Ubuntu.
+# Python 3.11 từ deadsnakes, KHÔNG từ repo Ubuntu.
+#
+# Lý do đo được, không phải sở thích: `apt-cache policy python3.11` trên
+# jammy-updates chỉ có **3.11.0~rc1** — một release candidate. Không có bản ổn
+# định nào trong repo distro. Còn base image CUDA 12.4 chỉ có bản Ubuntu 22.04
+# (nvidia không publish 12.4 cho 24.04), nên không thoát được bằng cách đổi base
+# mà không kéo theo đổi cả CUDA và torch.
+#
+# deadsnakes cho 3.11.x ổn định và giữ nguyên CUDA 12.4 + torch 2.5.1 đã kiểm chứng.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3.11 python3.11-venv python3.11-dev \
+      software-properties-common gpg-agent \
+    && add-apt-repository -y ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+      python3.11 python3.11-venv python3.11-dev python3.11-distutils \
       ffmpeg \
       git curl ca-certificates \
       fonts-dejavu-core fontconfig \
+    && apt-get purge -y software-properties-common gpg-agent \
+    && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Font có bộ tiếng Việt đầy đủ. Cài vào image để không phụ thuộc font của host.
@@ -43,8 +57,17 @@ ENV PYTHONPATH=/app
 WORKDIR /app
 
 # Torch trước và riêng: layer lớn nhất, cache lại được khi requirements đổi.
+# torch >= 2.6 là YÊU CẦU CỨNG, không phải chọn bản mới cho vui.
+#
+# WhisperX gióng tiếng Việt bằng `nguyenvulebinh/wav2vec2-base-vi`, model đó phát
+# hành dạng PyTorch `.bin` chứ không phải safetensors. `transformers` 5.x từ chối
+# `torch.load` khi torch < 2.6 vì CVE-2025-32434. Hệ quả với torch 2.5.1:
+# load_align_model(language_code="vi") ném ValueError, và **forced alignment tiếng
+# Việt không chạy được** — tức là mất luôn cơ chế timing phụ đề của F2.5.
+#
+# Đã xác minh có wheel cu124 cho cp311: torch 2.6.0 và torchaudio 2.6.0.
 RUN python3.11 -m pip install --index-url https://download.pytorch.org/whl/cu124 \
-      torch==2.5.1 torchaudio==2.5.1
+      torch==2.6.0 torchaudio==2.6.0
 
 COPY docker/worker/requirements.txt /tmp/requirements.txt
 RUN python3.11 -m pip install -r /tmp/requirements.txt
@@ -53,6 +76,9 @@ RUN python3.11 -m pip install -r /tmp/requirements.txt
 # chỉ lộ ra lúc chạy, dưới dạng "No module named 'torch'" — thông báo không nói gì
 # về nguyên nhân thật.
 RUN python -c "import sys; assert sys.version_info[:2] == (3, 11), sys.version" && \
+    python -c "import sys; assert 'rc' not in sys.version, f'Python release candidate: {sys.version}'" && \
+    python -c "import torch; v=tuple(int(x) for x in torch.__version__.split('+')[0].split('.')[:2]); \
+assert v >= (2, 6), f'torch {torch.__version__} < 2.6: transformers se tu choi torch.load va gong tieng Viet khong chay'" && \
     python -c "import torch, whisperx, demucs, voxcpm; print('torch', torch.__version__)"
 
 # Model KHÔNG bake vào image — tải vào /models (bind mount ../data/models)
