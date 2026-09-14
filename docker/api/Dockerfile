@@ -8,6 +8,10 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Chay "python scripts/x.py" dat sys.path[0] = /app/scripts nen khong thay
+# package src. PYTHONPATH sua dieu do cho moi script.
+ENV PYTHONPATH=/app
+
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -32,6 +36,7 @@ CMD ["uvicorn", "src.interfaces.api.main:app", "--host", "0.0.0.0", "--port", "8
 # ---------- prod ----------
 FROM base AS prod
 COPY src/ /app/src/
+COPY scripts/ /app/scripts/
 COPY alembic/ /app/alembic/
 COPY alembic.ini /app/alembic.ini
 RUN useradd -m -u 10001 qone && chown -R qone:qone /app

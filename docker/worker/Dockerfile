@@ -25,6 +25,10 @@ RUN fc-cache -fv || true
 RUN ln -sf /usr/bin/python3.11 /usr/local/bin/python && \
     ln -sf /usr/bin/python3.11 /usr/local/bin/python3
 
+# Chay "python scripts/x.py" dat sys.path[0] = /app/scripts nen khong thay
+# package src. PYTHONPATH sua dieu do cho moi script.
+ENV PYTHONPATH=/app
+
 WORKDIR /app
 
 # Torch trước và riêng: layer lớn nhất, cache lại được khi requirements đổi.
@@ -49,6 +53,7 @@ CMD ["python", "-m", "src.interfaces.worker.main"]
 # ---------- prod ----------
 FROM base AS prod
 COPY src/ /app/src/
+COPY scripts/ /app/scripts/
 COPY vendor/ /app/vendor/
 RUN useradd -m -u 10001 qone && chown -R qone:qone /app
 USER qone

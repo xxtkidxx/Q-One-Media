@@ -21,5 +21,12 @@ structlog==24.4.0
 google-api-python-client==2.156.0
 google-auth-oauthlib==1.2.1
 
+# --- TTS du phong cho DEV (khong dung o production, xem src/infrastructure/tts/edge.py) ---
+# edge-tts KHONG pin cung mot phien ban cu duoc: no la client khong chinh thuc,
+# phai chay theo thay doi handshake cua Microsoft. Ban 7.0.2 da bi 403
+# (WSServerHandshakeError) vao 14/09/2026 trong khi 7.2.8 chay duoc.
+# Day chinh la ly do ky thuat de KHONG dung no o production.
+edge-tts>=7.2.8
+
 # --- LLM ---
 anthropic==0.42.0

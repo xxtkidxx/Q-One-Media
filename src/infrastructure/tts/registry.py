@@ -35,4 +35,22 @@ def build_synthesizer(settings: Settings) -> SpeechSynthesizer:
             measured_syllables_per_sec=settings.tts.measured_rate,
         )
 
-    raise ConfigError(f"TTS_ENGINE không nhận ra: {settings.tts.engine!r} (voxcpm | fptai)")
+    if engine == "edge":
+        from src.infrastructure.tts.edge import VOICE_FEMALE, EdgeTtsSynthesizer
+
+        # Chặn ở đây là lớp thứ hai; lớp thứ nhất ở Settings.__post_init__. Hai lớp
+        # vì đây là ràng buộc license, không phải tuỳ chọn kỹ thuật.
+        if settings.is_prod:
+            raise ConfigError(
+                "TTS_ENGINE=edge không dùng được ở production: edge-tts là client "
+                "không chính thức của dịch vụ Microsoft Edge, điều khoản thương mại "
+                "không rõ ràng. Dùng voxcpm (Apache-2.0) hoặc fptai."
+            )
+        return EdgeTtsSynthesizer(
+            voice=settings.tts.voice_ref or VOICE_FEMALE,
+            measured_syllables_per_sec=settings.tts.measured_rate,
+        )
+
+    raise ConfigError(
+        f"TTS_ENGINE không nhận ra: {settings.tts.engine!r} (voxcpm | fptai | edge)"
+    )

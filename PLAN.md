@@ -15,8 +15,8 @@
 | Mốc hiện tại | **G2 + GW xong về code** · G0 vẫn mở và giờ đã thành đường găng |
 | Tiến độ tổng | ~75% code Giai đoạn 1; các bước cần GPU/credential chưa chạy thật |
 | Chặn lớn nhất | Chưa biết **có đủ nguồn video có license** hay không |
-| Đã kiểm chứng | **191 unit + 43 integration** test xanh; license gate chạy đầu-cuối qua HTTP và qua form web; toàn chuỗi render chạy với ffmpeg thật |
-| Việc tiếp theo | **G0.10 + G0.4**: xác nhận GPU trong Docker rồi chạy một video thật đầu-cuối |
+| Đã kiểm chứng | **200 unit + 43 integration** test xanh, ruff sạch; license gate chạy đầu-cuối qua HTTP và qua form web; render chạy với ffmpeg thật; **sinh được giọng tiếng Việt thật và đo được tốc độ đọc** |
+| Việc tiếp theo | **G1.3** rút glossary từ corpus nmi.vn; rồi **G0.3** test yt-dlp trên URL thật để chạy một video đầu-cuối (đã có đường TTS không cần GPU) |
 
 ---
 
@@ -58,11 +58,11 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [ ] **G0.4** Dựng VideoLingo, chạy 1 video với `target_language: 'Tiếng Việt'`
 - [ ] **G0.5** Blind test giọng: VoxCPM2 vs FPT.AI vs Viettel bằng thuật ngữ SPC/MSA thật
 - [ ] **G0.6** Clone thử giọng một kỹ sư NMI bằng VoxCPM2
-- [ ] **G0.7** Đo tốc độ đọc thật của giọng đã chọn (âm tiết/giây) → ngân sách kịch bản
-- [ ] **G0.8** Test glyph tiếng Việt: render chuỗi đủ dấu, soi mắt *(bẫy libass, F2.2)*
+- [~] **G0.7** `make speech-rate` đo tự động. **Đo được 3,54 âm tiết/giây** với edge-tts — các nguồn trên mạng ghi 5,28–6, lệch ~40%. Còn phải đo lại với VoxCPM2
+- [x] **G0.8** Be Vietnam Pro **đạt** với chuỗi đủ dấu, kiểm bằng libass thật. `make fonts` tải font, `check_font_covers_vietnamese()` kiểm tự động
 - [ ] **G0.9** Test `reframe.py` chế độ `blur` trên 1 video công nghiệp 16:9
 - [ ] **G0.10** Xác nhận GPU khả dụng trong Docker (`nvidia-smi` trong worker)
-- [ ] **G0.11** Kiểm `edge-tts --list-voices | grep vi-VN`
+- [x] **G0.11** Đúng **2 giọng** tiếng Việt: `vi-VN-HoaiMyNeural` (nữ), `vi-VN-NamMinhNeural` (nam). Đã thành engine `edge` **chỉ cho dev**
 
 ### G1 — Làm tay có công cụ (tuần 2–3)
 
@@ -202,6 +202,9 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D28 | Chọn đoạn: **tự lấy đề xuất đầu của LLM**, lưu cả danh sách kèm lý do | Sơ đồ ghi "LLM đề xuất → người chọn", nhưng GĐ1 đã có hai gate người; gate thứ ba đẩy công duyệt vượt xa mức 13–22 giờ/tháng đã ước lượng. Người duyệt cuối vẫn trả về được |
 | D29 | Worker **tự nối bước** qua hàng đợi; n8n không nằm trên dòng chảy chính | Mỗi bước xếp việc tiếp theo nên tự retry được và worker chết giữa đường không mất chuỗi. n8n giữ lại cho thông báo và trigger định kỳ, không phải để nối bước |
 | D30 | Không có `JobTask.MIX` / `JobTask.REFRAME` riêng | Hai việc đó nằm trong `render`: tách ra thì mỗi bước phải encode lại một lần nữa. Và một `JobTask` không có handler là mời một job treo vĩnh viễn |
+| D31 | Thêm engine TTS `edge` **chỉ cho dev**, chặn ở prod bằng hai lớp | Cho chạy toàn chuỗi không cần GPU. Nhưng `edge-tts` là client *không chính thức* của dịch vụ Microsoft Edge nên điều khoản thương mại không rõ — dự án đã bỏ OmniVoice vì đúng loại vấn đề đó (CC-BY-NC), giữ một chuẩn thì phải giữ cả ở đây |
+| D32 | `edge-tts` **không pin phiên bản cứng** (`>=7.2.8`) | Bản 7.0.2 bị HTTP 403 ở handshake trong khi 7.2.8 chạy được: client không chính thức phải chạy theo thay đổi của Microsoft. Đây cũng là lý do kỹ thuật để không dùng ở production |
+| D33 | Font tải bằng script, **không commit `.ttf`** | Be Vietnam Pro license OFL nên tải lại lúc nào cũng được; tải trong Dockerfile thì build phụ thuộc mạng và không lặp lại được |
 
 ---
 
@@ -225,3 +228,4 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | 13/09/2026 | Khảo sát công nghệ, quét nmi.vn, đánh giá 20 dự án OSS, chốt stack, dựng khung Docker + schema + AGENTS.md, dọn 13 file `.whl` và 5 tài liệu trung gian |
 | 13/09/2026 | Code lõi: domain 4 bounded context → application use case → infrastructure Postgres → FastAPI + worker. 4 commit. Bịt lỗ xác minh chủ sở hữu trong license gate. 112 unit + 12 integration test xanh. Sửa 4 bug do test bắt được (xem nhật ký commit) |
 | 14/09/2026 | Alembic thành nguồn duy nhất của schema · vendor Easel · tầng media (ffmpeg + ASS + render) · TTS + ngân sách âm tiết · ASR/Demucs/alignment · LLM chọn đoạn + viết kịch bản · publish YouTube/Facebook · mặt tiền web nội bộ · nối dây worker. 191 unit + 43 integration test |
+| 14/09/2026 | Viết nốt 4 script vận hành (`fetch_models`, `fetch_fonts`, `measure_speech_rate`, `youtube_authorize`) · G0.8 + G0.11 xong bằng kiểm chứng thật · engine `edge` cho phép chạy toàn chuỗi **không cần GPU** · đo được tốc độ đọc 3,54 âm tiết/giây |

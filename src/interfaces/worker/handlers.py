@@ -301,7 +301,10 @@ def handle_render(job: Job, uow: UnitOfWork, settings: Settings) -> None:
             output=output,
             source_aspect=aspect,
             attribution_text=attribution,
-            fonts_dir=Path("/app/fonts") if Path("/app/fonts").exists() else None,
+            # fonts_dir=None có chủ ý: image worker cài font vào
+            # /usr/share/fonts/truetype/qone/ rồi chạy fc-cache, nên libass tìm
+            # thấy qua fontconfig. Truyền fontsdir lại làm libass BỎ QUA font hệ
+            # thống và chỉ dùng thư mục đó.
         )
     )
 

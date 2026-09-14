@@ -60,6 +60,14 @@ node_modules/
 !tests/fixtures/**
 
 # ============================================================
+# Font tải về — không commit nhị phân, tải lại bằng: make fonts
+# (Be Vietnam Pro license OFL nên tải lại lúc nào cũng được)
+# ============================================================
+docker/worker/fonts/*.ttf
+docker/worker/fonts/*.otf
+docker/worker/fonts/OFL.txt
+
+# ============================================================
 # Hệ điều hành / editor
 # ============================================================
 .DS_Store

@@ -8,13 +8,13 @@ PROD    := $(BASE) -f docker/docker-compose.prod.yml --env-file .env.prod
 
 .DEFAULT_GOAL := help
 .PHONY: help dev-up dev-down dev-logs dev-build prod-up prod-down prod-logs prod-build \
-        test test-int test-all lint shell psql models status clean-work \n        migrate migrate-prod migrate-rev migrate-history
+        test test-int test-all lint shell psql fonts models speech-rate status clean-work \n        migrate migrate-prod migrate-rev migrate-history
 
 help:
 	@echo "DEV : dev-up dev-down dev-logs dev-build"
 	@echo "PROD: prod-up prod-down prod-logs prod-build"
 	@echo "DB  : migrate migrate-prod migrate-rev migrate-history"
-	@echo "KHAC: test test-int test-all lint shell psql models status clean-work \n        migrate migrate-prod migrate-rev migrate-history"
+	@echo "KHAC: test test-int test-all lint fonts speech-rate shell psql fonts models speech-rate status clean-work \n        migrate migrate-prod migrate-rev migrate-history"
 
 # ---------------- DEV ----------------
 dev-up:
@@ -59,7 +59,7 @@ test-all:
 	$(DC) $(DEV) run --rm api pytest -q -m "not gpu and not external"
 
 lint:
-	$(DC) $(DEV) run --rm --no-deps api ruff check src tests
+	$(DC) $(DEV) run --rm --no-deps api ruff check src tests scripts
 
 # ---------------- Migration ----------------
 # Alembic là nguồn duy nhất của schema. Baseline viết idempotent nên chạy được
@@ -83,6 +83,16 @@ shell:
 
 psql:
 	$(DC) $(DEV) exec postgres psql -U $${POSTGRES_USER:-qone} -d $${POSTGRES_DB:-qone}
+
+# Đo tốc độ đọc thật của giọng đang dùng → TTS_SYLLABLES_PER_SEC (G0.7).
+# Đo được 3,52 âm tiết/giây với edge-tts; các nguồn trên mạng ghi 5,28–6.
+speech-rate:
+	$(DC) $(DEV) run --rm api python scripts/measure_speech_rate.py
+
+# Tải font tiếng Việt vào docker/worker/fonts/ — chạy TRƯỚC khi build worker.
+# Font thiếu dải U+1Exx thì libass âm thầm thay font khác và không báo lỗi.
+fonts:
+	python scripts/fetch_fonts.py
 
 # Tải model vào data/models (dùng chung dev/prod, ~10 GB, chỉ cần một lần)
 models:

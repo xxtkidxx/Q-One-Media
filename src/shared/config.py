@@ -119,6 +119,13 @@ class Settings:
     def __post_init__(self) -> None:
         if self.app_env not in ("dev", "prod", "test"):
             raise ConfigError(f"APP_ENV phải là dev|prod|test, nhận {self.app_env!r}")
+        if self.app_env == "prod" and self.tts.engine.strip().lower() == "edge":
+            # Ràng buộc license, không phải tuỳ chọn kỹ thuật: edge-tts là client
+            # không chính thức của dịch vụ Microsoft Edge. Dự án đã bỏ OmniVoice vì
+            # weights CC-BY-NC — giữ một chuẩn thì phải giữ cả ở đây.
+            raise ConfigError(
+                "TTS_ENGINE=edge chỉ dùng cho dev. Production dùng voxcpm hoặc fptai"
+            )
         if self.app_env == "prod" and not self.web.enabled:
             # Chặn ở đây thay vì tin vào việc bind 127.0.0.1: một lần thêm reverse
             # proxy là trang duyệt nội dung thành công khai, và không ai nhận ra.
