@@ -25,7 +25,11 @@ Mọi thứ trong Docker. **Không cài Python/ffmpeg/model lên máy host.**
 cp .env.dev.example .env.dev      # điền: mật khẩu postgres, N8N_ENCRYPTION_KEY, ANTHROPIC_API_KEY
 make dev-up                       # API :8000 · n8n :5678
 make migrate                      # alembic upgrade head — BẮT BUỘC lần đầu
-make models                       # tải model vào data/models (~10 GB, chỉ một lần)
+make models                       # tải model vào data/models (đo được 8,5 GB, chỉ một lần)
+                                  #   faster-whisper-large-v3  2,9 GB
+                                  #   openbmb/VoxCPM2          2,8 GB
+                                  #   wav2vec2-base-vi (gióng) 726 MB
+                                  #   demucs htdemucs           80 MB
 
 make fonts                        # tải font tiếng Việt (trước khi build worker)
 make smoke                        # chạy toàn chuỗi ra một video thật, KHÔNG cần GPU
@@ -101,7 +105,7 @@ phạm vi quyền. Không có clearance thì không gọi được hàm. Xem `sr
 | Khâu | Chọn | Star | License |
 |---|---|---:|---|
 | Xương sống pipeline video | **VideoLingo** — đã có yt-dlp + Demucs + WhisperX | 18.433 | Apache-2.0 |
-| Giọng tiếng Việt | **VoxCPM2** — có `vi`, voice cloning, chạy on-prem | 37.028 | Apache-2.0 |
+| Giọng tiếng Việt | **VoxCPM2** (`openbmb/VoxCPM2`) — có `vi`, voice cloning, on-prem | 37.149 | Apache-2.0 |
 | Reframe 9:16 | **Easel `reframe.py`** chế độ `blur` | 1.002 | Apache-2.0 |
 | Trộn audio | **Easel `audio_mix.py`** + ffmpeg | 1.002 | Apache-2.0 |
 | Publish, license registry, hộp thư URL | Tự viết | — | — |

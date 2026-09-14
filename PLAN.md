@@ -60,7 +60,7 @@ Mục tiêu: trả lời **tải được từ đâu · nguồn nào có phép �
 - [ ] **G0.6** Clone thử giọng một kỹ sư NMI bằng VoxCPM2
 - [~] **G0.7** `make speech-rate` đo tự động. **Đo được 3,54 âm tiết/giây** với edge-tts — các nguồn trên mạng ghi 5,28–6, lệch ~40%. Còn phải đo lại với VoxCPM2
 - [x] **G0.8** Be Vietnam Pro **đạt** với chuỗi đủ dấu, kiểm bằng libass thật. `make fonts` tải font, `check_font_covers_vietnamese()` kiểm tự động
-- [ ] **G0.9** Test `reframe.py` chế độ `blur` trên 1 video công nghiệp 16:9
+- [x] **G0.9** `reframe.py` chế độ `blur` chạy với ffmpeg thật (integration test) — 16:9 → 9:16 không cắt hình
 - [x] **G0.10** GPU chạy trong Docker: **RTX 3070, 8 GB VRAM**, driver 595.97. 8 GB là ca chật — large-v3 (~4,7 GB) + Demucs (~2 GB) + VoxCPM2 (~5 GB) **không thể cùng ở trên card**, phải chạy tuần tự và nhả VRAM sau mỗi model (`_free_vram()`)
 - [x] **G0.11** Đúng **2 giọng** tiếng Việt: `vi-VN-HoaiMyNeural` (nữ), `vi-VN-NamMinhNeural` (nam). Đã thành engine `edge` **chỉ cho dev**
 
