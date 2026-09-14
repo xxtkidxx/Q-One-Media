@@ -220,6 +220,9 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | D46 | Đọc `sample_rate` từ `model.tts_model`, **không dùng giá trị mặc định** | Lớp công khai `VoxCPM` bọc `tts_model` và không expose `sample_rate`. Mặc định 16000 là sai âm thầm theo cách tệ nhất: WAV sai tần số → audio phát sai tốc độ → độ dài đo sai → **ngân sách âm tiết sai theo**, và không ai truy ra được từ đâu |
 | D47 | `load_denoiser=False` và `normalize=False` khi gọi VoxCPM2 | Denoiser là model riêng chỉ để làm sạch audio mẫu — trên card 8 GB thì mỗi GB đều đáng, và giọng mẫu nên được thu sạch từ đầu. Bộ chuẩn hoá văn bản của VoxCPM làm cho tiếng Trung/Anh, đưa tiếng Việt vào thì rủi ro đọc sai số; prompt viết kịch bản đã yêu cầu viết số thành chữ |
 | D48 | Cho phép **tường minh** các class omegaconf cho `torch.load`, không tắt `weights_only` | torch 2.6 đổi mặc định `torch.load` sang `weights_only=True` — đúng về bảo mật, nhưng checkpoint VAD của pyannote (WhisperX dùng để cắt đoạn có tiếng) chứa object omegaconf đã pickle nên bị từ chối. Chọn allowlist đúng class cần thay vì `weights_only=False` cho mọi lần load. Rủi ro còn lại chấp nhận được vì model đến từ **id repo đã pin** và cache local; nếu về sau cho người dùng trỏ tới checkpoint của họ thì phải xem lại |
+| D49 | **Không dùng forced alignment của WhisperX**; gióng bằng word timestamp của Whisper | Hai lý do độc lập. *License:* model `vi` duy nhất WhisperX trỏ tới là `nguyenvulebinh/wav2vec2-base-vi` — `cc-by-nc-4.0`, không dùng thương mại được; cả họ MMS của Meta cũng `cc-by-nc-4.0`, nên mọi model gióng tiếng Việt sẵn có đều NonCommercial. *Kỹ thuật:* model đó có tag `pretraining`, **không có CTC head** (`lm_head` khởi tạo ngẫu nhiên) → timing vô nghĩa mà không báo lỗi. Đường mới dùng `Systran/faster-whisper-large-v3` (MIT) + weights `openai/whisper-large-v3` (Apache-2.0); **chữ vẫn là chữ mình viết**, Whisper chỉ cấp thời gian |
+| D50 | Xoá hẳn `align_known_text` khỏi `whisperx.py` thay vì để lại | Để hai đường tồn tại là mời người khác gọi nhầm vào đường NonCommercial |
+| D51 | `del model` tường minh trước `_free_vram()` | Đo trên RTX 3070: khi large-v3 float16 chạy, VRAM rảnh về **0,00/8,0 GB**. CTranslate2 cấp bộ nhớ **ngoài** allocator của PyTorch nên `empty_cache()` một mình không nhả được gì. Trên card 8 GB, chạy tuần tự là **bắt buộc**, không phải thực hành tốt |
 
 ---
 
@@ -233,6 +236,7 @@ Agent: làm hết phần **không** phụ thuộc các câu này. Đừng dừng
 | Công người duyệt không kham được | Trung bình | Chờ Q5 |
 | Không có GPU | Trung bình | Chờ Q2 |
 | Remotion company license (GĐ2) | Thấp | Chưa cần tới G6.6 |
+| **License model AI** — dễ lọt model NonCommercial vào đường sản xuất | **Cao** | Đã bắt 2 ca: OmniVoice (CC-BY-NC) và model gióng của WhisperX (cc-by-nc-4.0). Quy tắc: **kiểm license weights trên HF model card trước khi thêm bất kỳ model nào**, không tin license của code |
 
 ---
 
