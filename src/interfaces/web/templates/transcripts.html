@@ -10,7 +10,7 @@
 {% if approved %}
 <div class="note" style="border-left-color:var(--ok)">
   Đã ghi nhận transcript item #{{ approved }} đạt và chuyển sang bước chọn đoạn.
-  Item không còn nằm trong danh sách chờ soát. <a href="/web">Xem trạng thái trên bảng điều khiển</a>.
+  Item không còn nằm trong danh sách chờ soát. <a href="">Xem trạng thái trên bảng điều khiển</a>.
 </div>
 {% endif %}
 
@@ -41,7 +41,7 @@
     <p class="empty">Chưa đọc được file transcript.</p>
   {% endif %}
 
-  <form method="post" action="/web/transcripts/{{ row.item.id }}/approve">
+  <form method="post" action="/transcripts/{{ row.item.id }}/approve">
     <div class="row">
       <div>
         <label>Người soát</label>

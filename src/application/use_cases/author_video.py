@@ -25,8 +25,6 @@ from src.domain.authoring.visuals import Shot, ShotKind, VisualPlan, default_pla
 from src.domain.errors import DomainError, InvariantViolation
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import (
-    HARD_SEGMENT_MAX_SEC,
-    HARD_SEGMENT_MIN_SEC,
     SpeechRate,
     SyllableBudget,
 )
@@ -129,11 +127,8 @@ def create_video_from_prompt(
         raise InvariantViolation("phải ghi tên người tạo nội dung")
     if not brief.strip():
         raise InvariantViolation("đề bài rỗng — không có gì để viết")
-    if not HARD_SEGMENT_MIN_SEC <= target_sec <= HARD_SEGMENT_MAX_SEC:
-        raise InvariantViolation(
-            f"thời lượng {target_sec}s ngoài biên "
-            f"{HARD_SEGMENT_MIN_SEC}–{HARD_SEGMENT_MAX_SEC}s"
-        )
+    if target_sec <= 0:
+        raise InvariantViolation("thời lượng video phải lớn hơn 0 giây")
     if speech_rate is None:
         raise SpeechRateUnknown(
             "chưa đo tốc độ đọc — không lập được ngân sách âm tiết (G0.7). "

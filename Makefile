@@ -10,7 +10,7 @@ PROD    := -f docker/docker-compose.prod.yml --env-file .env.prod
 .PHONY: help dev-up dev-down dev-logs dev-build prod-up prod-down prod-logs prod-build \
         migrate migrate-prod migrate-rev migrate-history \
         test test-int test-gpu test-all lint \
-        fonts models speech-rate measure-load corpus glossary-load \
+        fonts models speech-rate measure-load corpus glossary-load voice-previews \
         shell psql smoke status clean-work
 
 help:
@@ -18,7 +18,7 @@ help:
 	@echo "PROD: prod-up prod-down prod-logs prod-build"
 	@echo "DB  : migrate migrate-prod migrate-rev migrate-history"
 	@echo "TEST: test test-int test-gpu test-all lint"
-	@echo "MODEL: models fonts speech-rate measure-load"
+	@echo "MODEL: models fonts speech-rate measure-load voice-previews"
 	@echo "DATA: corpus glossary-load"
 	@echo "KHAC: smoke status shell psql clean-work"
 
@@ -93,6 +93,9 @@ shell:
 
 psql:
 	$(DC) $(DEV) exec postgres psql -U $${POSTGRES_USER:-qone} -d $${POSTGRES_DB:-qone}
+
+voice-previews:
+	$(DC) $(DEV) exec worker python scripts/generate_voice_previews.py
 
 # Chạy toàn chuỗi một lần, không cần GPU, ra một video thật trong trang duyệt.
 # Bước tải/Demucs/WhisperX/LLM được thay bằng dữ liệu mẫu — script nói rõ cái nào.

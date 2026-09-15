@@ -70,8 +70,6 @@ from src.application.use_cases.write_script import (
 from src.domain.authoring.visuals import Shot, ShotKind
 from src.domain.errors import DomainError
 from src.domain.production.value_objects import (
-    HARD_SEGMENT_MAX_SEC,
-    HARD_SEGMENT_MIN_SEC,
     RECOMMENDED_SEGMENT_MAX_SEC,
     RECOMMENDED_SEGMENT_MIN_SEC,
     AspectRatio,
@@ -88,7 +86,7 @@ from src.domain.sourcing.value_objects import (
 )
 from src.infrastructure.clock import SystemClock
 from src.infrastructure.db import mappers
-from src.infrastructure.db.orm import AuditLogRow, ItemRow
+from src.infrastructure.db.orm import AuditLogRow, ItemRow, JobRow
 from src.infrastructure.db.uow import SqlUnitOfWork
 from src.infrastructure.llm.registry import build_script_writer
 from src.infrastructure.media import ffmpeg
@@ -103,7 +101,7 @@ TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 # giữa các lần gọi.
 OPTIONAL_FILE = File()
 
-router = APIRouter(prefix="/web", tags=["web"], include_in_schema=False)
+router = APIRouter(tags=["web"], include_in_schema=False)
 
 Uow = Annotated[SqlUnitOfWork, Depends(get_uow)]
 Clock = Annotated[SystemClock, Depends(get_clock)]
@@ -163,6 +161,20 @@ PIPELINE_LABELS = {
     ItemStage.APPROVED: "Đã duyệt",
     ItemStage.PUBLISHED: "Đã xuất bản",
 }
+JOB_LABELS = {
+    "download": "Tải video", "separate": "Tách audio",
+    "transcribe": "Nhận dạng lời nói", "pick_segment": "Chọn đoạn",
+    "write_script": "Viết kịch bản", "synthesize": "Tạo giọng Việt",
+    "align": "Căn phụ đề", "render": "Dựng video",
+    "compose": "Dựng video Studio", "publish": "Xuất bản",
+}
+JOB_TARGET_STAGE = {
+    "download": ItemStage.INBOX, "separate": ItemStage.DOWNLOADED,
+    "transcribe": ItemStage.SEPARATED, "pick_segment": ItemStage.TRANSCRIPT_APPROVED,
+    "write_script": ItemStage.SCRIPTED, "synthesize": ItemStage.VOICED,
+    "align": ItemStage.ALIGNED, "render": ItemStage.RENDERED,
+    "publish": ItemStage.PUBLISHED,
+}
 
 
 # Nhãn hiển thị của **mọi** trạng thái, gồm cả ba trạng thái ngoài dòng chảy.
@@ -196,20 +208,19 @@ def _progress_detail(stage: ItemStage) -> tuple[int, int, int, str]:
     return step, total, PIPELINE_PROGRESS.get(stage, 0), PIPELINE_LABELS.get(stage, stage.value)
 
 
-def _workflow() -> list[dict]:
-    """Sơ đồ 15 bước kèm % của từng bước — **giống nhau ở mọi trang**.
-
-    Cố ý không tô theo trạng thái của item đang mở: một video gốc dừng ở bước 6 rồi
-    để các clip con đi tiếp, nên tô màu theo item nào cũng ra một bức tranh sai —
-    người xem tưởng cả video đứng yên, hoặc tưởng clip con đã tự làm 5 bước đầu.
-    Sơ đồ ở đây để **hiểu quy trình**; trạng thái thật nằm ở badge và thanh tiến
-    trình phía trên, nơi nó không lẫn được với bất kỳ item nào khác.
-    """
+def _workflow(stage: ItemStage) -> list[dict]:
+    """Sơ đồ 15 bước, tô theo tiến trình của đúng video hoặc clip đang mở."""
+    current_index = PIPELINE_ORDER.index(stage) if stage in PIPELINE_ORDER else -1
     return [
         {
             "index": index + 1,
             "label": PIPELINE_LABELS[step],
             "percent": PIPELINE_PROGRESS[step],
+            "state": (
+                "done" if index < current_index
+                else "current" if index == current_index
+                else "pending"
+            ),
         }
         for index, step in enumerate(PIPELINE_ORDER)
     ]
@@ -263,13 +274,13 @@ def _effective_attribution(text: str, license_type: LicenseType, source) -> str 
 def _review_error(item_id: int, message: str) -> RedirectResponse:
     """Lỗi của một thao tác trên trang review thì ở lại **đúng trang đó**.
 
-    Trang lỗi riêng đẩy người dùng sang URL của POST (``/web/items/8/clips``) —
+    Trang lỗi riêng đẩy người dùng sang URL của POST (``/items/8/clips``) —
     một trang cụt, mất hết ngữ cảnh video và phải bấm back mới làm tiếp được.
     Lỗi ở đây là kết quả nghiệp vụ hợp lệ (đoạn quá dài, thiếu tên người duyệt),
     nên nó thuộc về form vừa bấm, không phải một trang khác.
     """
     return RedirectResponse(
-        url=f"/web/review/{item_id}?error={quote(message)}", status_code=303
+        url=f"/review/{item_id}?error={quote(message)}", status_code=303
     )
 
 
@@ -279,13 +290,14 @@ def _render(request: Request, template: str, **ctx) -> HTMLResponse:
     Chữ ký cũ ``TemplateResponse(name, {"request": ...})`` đã deprecated và sẽ bị
     bỏ — gom vào một hàm để lần sau đổi chỉ sửa một chỗ.
     """
+    ctx.setdefault("current_user", getattr(request.state, "user", None))
     return TEMPLATES.TemplateResponse(request, template, ctx)
 
 
 # ---------------- Dashboard ----------------
 
 
-@router.get("", response_class=HTMLResponse)
+@router.get("/", response_class=HTMLResponse)
 def dashboard(request: Request, uow: Uow):
     with uow:
         counts = uow.items.count_by_stage()
@@ -373,8 +385,6 @@ def studio_page(request: Request, uow: Uow, config: Config):
         "studio.html",
         title="Studio",
         rows=rows,
-        seg_min=HARD_SEGMENT_MIN_SEC,
-        seg_max=HARD_SEGMENT_MAX_SEC,
         seg_best_min=RECOMMENDED_SEGMENT_MIN_SEC,
         seg_best_max=RECOMMENDED_SEGMENT_MAX_SEC,
         image_provider=config.visuals.provider if config.visuals.enabled else None,
@@ -413,7 +423,7 @@ def studio_create(
         )
     except (DomainError, RuntimeError, ValueError) as exc:
         return _error_page(request, "Không tạo được video", str(exc))
-    return RedirectResponse(url=f"/web/studio?created={result.item.id}", status_code=303)
+    return RedirectResponse(url=f"/studio?created={result.item.id}", status_code=303)
 
 
 @router.post("/studio/{item_id}/shots", response_class=HTMLResponse)
@@ -468,7 +478,7 @@ async def studio_add_shot(
     finally:
         if media is not None:
             await media.close()
-    return RedirectResponse(url=f"/web/studio?shot_added={item_id}", status_code=303)
+    return RedirectResponse(url=f"/studio?shot_added={item_id}", status_code=303)
 
 
 @router.post("/studio/{item_id}/shots/{index}/delete", response_class=HTMLResponse)
@@ -487,7 +497,7 @@ def studio_remove_shot(
         )
     except DomainError as exc:
         return _error_page(request, "Không xoá được cảnh", str(exc))
-    return RedirectResponse(url=f"/web/studio?shot_removed={item_id}", status_code=303)
+    return RedirectResponse(url=f"/studio?shot_removed={item_id}", status_code=303)
 
 
 def _parse_chart_data(raw: str) -> tuple[tuple[str, float], ...]:
@@ -526,6 +536,27 @@ def item_status(uow: Uow):
                 ItemRow.clip_index,
             )
         ).all()
+        jobs = uow.session.execute(
+            select(JobRow).order_by(JobRow.item_id, JobRow.id.desc())
+        ).scalars().all()
+    latest_jobs = {}
+    for job in jobs:
+        if job.item_id is not None and job.item_id not in latest_jobs:
+            latest_jobs[job.item_id] = job
+
+    def live_detail(row):
+        step, total, progress, label = _progress_detail(row.stage)
+        job = latest_jobs.get(row.id)
+        if job is None or job.status.value not in {"pending", "running", "failed"}:
+            return step, total, progress, label, None, row.stage_error
+        target = JOB_TARGET_STAGE.get(job.task)
+        if target in PIPELINE_ORDER:
+            step = PIPELINE_ORDER.index(target) + 1
+        prefix = {
+            "pending": "Chờ xử lý", "running": "Đang xử lý", "failed": "Xử lý lỗi",
+        }[job.status.value]
+        label = f"{prefix}: {JOB_LABELS.get(job.task, job.task)}"
+        return step, total, progress, label, job.status.value, row.stage_error or job.error
     return {
         "items": [
             {
@@ -537,11 +568,12 @@ def item_status(uow: Uow):
                 # gộp được ở phía trình duyệt thì snapshot phải nói clip thuộc về ai.
                 "parent_item_id": row.parent_item_id,
                 "clip_index": row.clip_index,
-                "progress": _progress_detail(row.stage)[2],
-                "step": _progress_detail(row.stage)[0],
-                "total_steps": _progress_detail(row.stage)[1],
-                "label": _progress_detail(row.stage)[3],
-                "error": row.stage_error,
+                "progress": live_detail(row)[2],
+                "step": live_detail(row)[0],
+                "total_steps": live_detail(row)[1],
+                "label": live_detail(row)[3],
+                "job_status": live_detail(row)[4],
+                "error": live_detail(row)[5],
                 "updated_at": row.updated_at.isoformat(),
             }
             for row in rows
@@ -627,7 +659,7 @@ def sources_page(
                 for clip in clips:
                     stage_counts[clip.stage] = stage_counts.get(clip.stage, 0) + 1
                 # Transcript, video thành phẩm và form thao tác nay nằm ở
-                # /web/review/{id}. Trang này chỉ liệt kê, nên không đọc file
+                # /review/{id}. Trang này chỉ liệt kê, nên không đọc file
                 # transcript của từng item nữa — mỗi dòng tốn một lần đọc đĩa chỉ
                 # để quyết định hiện một cái link.
                 item_views.append({
@@ -652,12 +684,14 @@ def sources_page(
                 "code": f"Nguồn #{source.id}",
                 "title": source.display_name or source.url.host,
                 "events": by_entity.get(("source", source.id or 0), []),
+                "level": 0,
             }]
             for view in item_views:
                 history.append({
                     "code": f"#{view['display_id']}",
                     "title": "Video gốc" if view["clip_count"] else "Video",
                     "events": by_entity.get(("item", view["item"].id or 0), []),
+                    "level": 1,
                 })
                 for clip in sorted(
                     children.get(view["item"].id or 0, []), key=lambda c: c.clip_index or 0
@@ -666,6 +700,7 @@ def sources_page(
                         "code": f"#{source.id}-{clip.clip_index}",
                         "title": f"Clip {clip.clip_index} · {_stage_label(clip.stage)}",
                         "events": by_entity.get(("item", clip.id or 0), []),
+                        "level": 2,
                     })
             rows.append(
                 SimpleNamespace(
@@ -719,7 +754,7 @@ def create_clips_form(
     except (DomainError, ValueError) as exc:
         return _review_error(item_id, f"Không tạo được clip: {exc}")
     return RedirectResponse(
-        url=f"/web/review/{item_id}?created={len(created)}", status_code=303
+        url=f"/review/{item_id}?created={len(created)}", status_code=303
     )
 
 
@@ -733,6 +768,18 @@ def source_video(item_id: int, uow: Uow, config: Config):
     if not path.is_file():
         raise HTTPException(status_code=404, detail="file video nguồn không tồn tại")
     return FileResponse(path)
+
+
+@router.get("/voices/{engine}/{name}/preview", response_class=FileResponse)
+def voice_preview(engine: str, name: str, config: Config):
+    """Phát đúng file mẫu đã khai trong catalog; không mở cả cây media ra HTTP."""
+    voice = next(
+        (option for option in list_voices(config) if option.id == f"{engine}:{name}"),
+        None,
+    )
+    if voice is None or voice.preview_path is None or not voice.preview_path.is_file():
+        raise HTTPException(status_code=404, detail="giọng này chưa có file nghe thử")
+    return FileResponse(voice.preview_path)
 
 
 @router.post("/items/{item_id}/transcript", response_class=HTMLResponse)
@@ -762,7 +809,7 @@ def save_transcript_form(
     except DomainError as exc:
         return _review_error(item_id, f"Không lưu được transcript: {exc}")
     flag = "approved" if decision == "approve" else "saved"
-    return RedirectResponse(url=f"/web/review/{item_id}?{flag}=1", status_code=303)
+    return RedirectResponse(url=f"/review/{item_id}?{flag}=1", status_code=303)
 
 
 @router.post("/sources", response_class=HTMLResponse)
@@ -797,7 +844,7 @@ def declare(
         )
     except (SourceAlreadyDeclared, DomainError) as exc:
         return _error_page(request, "Không khai báo được nguồn", str(exc))
-    return RedirectResponse(url="/web/sources", status_code=303)
+    return RedirectResponse(url="/sources", status_code=303)
 
 
 @router.post("/sources/{source_id}/approve", response_class=HTMLResponse)
@@ -844,7 +891,7 @@ def approve_source_form(
         )
     except DomainError as exc:
         return _error_page(request, "Không duyệt được nguồn", str(exc))
-    return RedirectResponse(url="/web/sources", status_code=303)
+    return RedirectResponse(url="/sources", status_code=303)
 
 
 @router.post("/sources/{source_id}/start", response_class=HTMLResponse)
@@ -860,7 +907,7 @@ def start_single_source(request: Request, source_id: int, uow: Uow, clock: Clock
     except (DomainError, ItemAlreadyExists) as exc:
         return _error_page(request, "Không bắt đầu được pipeline", str(exc))
     return RedirectResponse(
-        url=f"/web/sources?auto_started={result.item.id}", status_code=303
+        url=f"/sources?auto_started={result.item.id}", status_code=303
     )
 
 
@@ -985,7 +1032,7 @@ async def upload_new_source_video(
         return _error_page(request, "Không nạp được video", str(exc))
     finally:
         await video.close()
-    return RedirectResponse(url=f"/web/sources?uploaded={item.id}", status_code=303)
+    return RedirectResponse(url=f"/sources?uploaded={item.id}", status_code=303)
 
 
 @router.post("/sources/{source_id}/uploads", response_class=HTMLResponse)
@@ -1018,7 +1065,7 @@ async def upload_into_source(
         return _error_page(request, "Không nạp được video", str(exc))
     finally:
         await video.close()
-    return RedirectResponse(url=f"/web/sources?uploaded={item.id}", status_code=303)
+    return RedirectResponse(url=f"/sources?uploaded={item.id}", status_code=303)
 
 
 @router.post("/items", response_class=HTMLResponse)
@@ -1043,7 +1090,7 @@ def submit(
             result.reason or "",
             hint="Item vẫn được lưu lại để thấy nhu cầu thật. Duyệt nguồn rồi nạp lại.",
         )
-    return RedirectResponse(url="/web/sources", status_code=303)
+    return RedirectResponse(url="/sources", status_code=303)
 
 
 # ---------------- Soát transcript (gate người thứ nhất) ----------------
@@ -1096,7 +1143,7 @@ def transcript_approve(
         return _error_page(request, "Không ghi được", str(exc))
     # Về thẳng trang review: việc kế tiếp sau khi soát transcript là **chọn đoạn**,
     # và form đó nằm ở đúng trang này.
-    return RedirectResponse(url=f"/web/review/{item_id}?approved=1", status_code=303)
+    return RedirectResponse(url=f"/review/{item_id}?approved=1", status_code=303)
 
 
 # ---------------- Hàng đợi duyệt ----------------
@@ -1190,24 +1237,25 @@ def review_detail(request: Request, item_id: int, uow: Uow, config: Config):
         clips=clip_rows,
         clip_count=len(clips),
         publish_enabled=config.publish.enabled,
-        workflow=_workflow(),
+        workflow=_workflow(item.stage),
         off_pipeline=item.stage in BLOCKED_STAGES,
         default_tab=_default_review_tab(
             item,
             has_clips=bool(clip_rows),
             created=bool(request.query_params.get("created")),
         ),
-        # Biên đoạn lấy thẳng từ domain: form nói trước luật, thay vì để người dùng
-        # nhập xong mới biết mình vi phạm.
-        seg_min=HARD_SEGMENT_MIN_SEC,
-        seg_max=HARD_SEGMENT_MAX_SEC,
         seg_best_min=RECOMMENDED_SEGMENT_MIN_SEC,
         seg_best_max=RECOMMENDED_SEGMENT_MAX_SEC,
         voices=list_voices(config),
+        preview_voice_ids={
+            voice.id
+            for voice in list_voices(config)
+            if voice.preview_path is not None and voice.preview_path.is_file()
+        },
         default_voice=default_voice_id(config),
         transcript_segments=transcript_segments,
         source_video_url=(
-            f"/web/items/{item.id}/source-video" if item.path_source else None
+            f"/items/{item.id}/source-video" if item.path_source else None
         ),
         # Đường dẫn tương đối trong DB → URL phục vụ file. Chỉ item đã render
         # mới có, nên template phải chịu được None.
@@ -1268,7 +1316,7 @@ def review_decide(
     except DomainError as exc:
         return _review_error(back, f"Không ghi được quyết định: {exc}")
     return RedirectResponse(
-        url=f"/web/review/{back}?decided={decision}#clips", status_code=303
+        url=f"/review/{back}?decided={decision}#clips", status_code=303
     )
 
 

@@ -4,10 +4,10 @@
 {% set can_pick_clips = item.stage.value == 'transcript_approved' and not item.parent_item_id %}
 <div class="page-head" data-item-id="{{ item.id }}" data-stage="{{ item.stage.value }}">
   <div>
-    <a class="sub" href="/web/sources?open_source={{ item.source_id }}">← Quay lại nguồn #{{ item.source_id }}</a>
+    <a class="sub" href="/sources?open_source={{ item.source_id }}">← Quay lại nguồn #{{ item.source_id }}</a>
     <h1 style="margin-top:8px">{% if is_root %}Video gốc #{{ item.source_id }}-gốc{% else %}Clip {{ item.clip_index }} · #{{ item.source_id }}-{{ item.clip_index }}{% endif %}</h1>
     <p class="sub">{{ item.title_original or '(chưa có tiêu đề gốc)' }} · <a href="{{ item.url.value }}" target="_blank" rel="noopener">Mở nguồn gốc</a></p>
-    <p class="sub">{% if is_root %}Video gốc này sinh ra <strong>{{ clip_count }}</strong> clip con; mỗi clip chạy pipeline riêng và được duyệt riêng.{% else %}Clip con của <a href="/web/review/{{ root.id }}">video gốc #{{ item.source_id }}-gốc</a>.{% endif %}</p>
+    <p class="sub">{% if is_root %}Video gốc này sinh ra <strong>{{ clip_count }}</strong> clip con; mỗi clip chạy pipeline riêng và được duyệt riêng.{% else %}Clip con của <a href="/review/{{ root.id }}">video gốc #{{ item.source_id }}-gốc</a>.{% endif %}</p>
   </div>
   <div style="text-align:right">
     <span class="pill {{ item.stage.value }}" data-live-stage>{{ stage_label }}</span>
@@ -28,7 +28,7 @@
 <section class="card">
   <div class="item-top"><div><h2 style="margin:0">Workflow pipeline</h2><p class="sub">Sơ đồ chung của mọi video: 15 bước kèm % tích luỹ của từng bước. Video gốc dừng ở bước “Chọn đoạn”, các clip con đi tiếp phần còn lại — nên sơ đồ này để hiểu quy trình, không phải trạng thái của một clip cụ thể.</p></div></div>
   <div class="workflow">
-    {% for step in workflow %}<div class="wf-step" title="{{ step.label }} · {{ step.percent }}%"><span class="wf-dot">{{ step.index }}</span><span class="wf-label">{{ step.label }}</span><span class="wf-pct num">{{ step.percent }}%</span></div>{% endfor %}
+    {% for step in workflow %}<div class="wf-step {{ step.state }}" title="{{ step.label }} · {{ step.percent }}%"><span class="wf-dot">{% if step.state == 'done' %}✓{% else %}{{ step.index }}{% endif %}</span><span class="wf-label">{{ step.label }}</span><span class="wf-pct num">{{ step.percent }}%</span></div>{% endfor %}
   </div>
 </section>
 
@@ -46,7 +46,7 @@
     {% if item.segment %}<span class="pill ok">{{ item.segment.start_sec|round(1) }}–{{ item.segment.end_sec|round(1) }} giây</span>{% endif %}
   </div>
   {% if transcript_segments and source_video_url %}
-  <form method="post" action="/web/items/{{ item.id }}/transcript" class="subtitle-editor" data-subtitle-editor>
+  <form method="post" action="/items/{{ item.id }}/transcript" class="subtitle-editor" data-subtitle-editor>
     <div class="subtitle-layout">
       <div class="subtitle-player"><video controls preload="metadata" src="{{ source_video_url }}"></video><div class="subtitle-preview" data-subtitle-preview>Chọn một dòng phụ đề để bắt đầu</div><div class="player-time num" data-player-time>00:00.000</div></div>
       <div class="subtitle-timeline"><table><thead><tr><th>#</th><th>Thời gian</th><th>Nội dung phụ đề</th><th></th></tr></thead><tbody data-subtitle-rows>
@@ -61,18 +61,18 @@
 <section class="card" data-tab-panel="clip" {% if default_tab != "clip" %}hidden{% endif %}>
   <h2 style="margin-top:0">Chọn một hoặc nhiều đoạn để tạo clip con</h2>
   {% if can_pick_clips %}
-  <p class="sub">Mỗi đoạn thành một clip con độc lập, chạy pipeline riêng từ bước viết kịch bản. Mỗi đoạn phải dài <strong>{{ seg_min|round(0)|int }}–{{ seg_max|round(0)|int }} giây</strong> (tốt nhất {{ seg_best_min|round(0)|int }}–{{ seg_best_max|round(0)|int }} giây cho short){% if item.duration_sec %} · video gốc dài {{ item.duration_sec }} giây{% endif %}.</p>
-  <form method="post" action="/web/items/{{ item.id }}/clips">
-    <div class="clip-list" data-seg-min="{{ seg_min }}" data-seg-max="{{ seg_max }}"><div class="clip-row"><div><label>Clip 1 · Bắt đầu (giây)</label><input type="number" step="0.1" min="0" max="{{ item.duration_sec }}" name="start_sec" required></div><div><label>Kết thúc (giây)</label><input type="number" step="0.1" min="0" max="{{ item.duration_sec }}" name="end_sec" required></div><span class="clip-end"><span class="sub" data-clip-length>—</span></span></div></div>
+  <p class="sub">Mỗi đoạn thành một clip con độc lập, chạy pipeline riêng từ bước viết kịch bản. Khuyến cáo <strong>{{ seg_best_min|round(0)|int }}–{{ seg_best_max|round(0)|int }} giây</strong> cho video ngắn; bạn có thể chọn dài tùy ý trong phạm vi video gốc{% if item.duration_sec %} ({{ item.duration_sec }} giây){% endif %}.</p>
+  <form method="post" action="/items/{{ item.id }}/clips">
+    <div class="clip-list" data-seg-min="{{ seg_best_min }}" data-seg-max="{{ seg_best_max }}"><div class="clip-row"><div><label>Clip 1 · Bắt đầu (giây)</label><input type="number" step="0.1" min="0" max="{{ item.duration_sec }}" name="start_sec" required></div><div><label>Kết thúc (giây)</label><input type="number" step="0.1" min="0" max="{{ item.duration_sec }}" name="end_sec" required></div><span class="clip-end"><span class="sub" data-clip-length>—</span></span></div></div>
     <button type="button" class="ghost" onclick="addClip(this)">＋ Thêm đoạn</button>
-    <div class="row"><div><label>Người quyết định</label><input name="actor" value="web" required></div><div><label>Giọng đọc</label><select name="voice_id">{% for voice in voices %}<option value="{{ voice.id }}" {% if voice.id == default_voice %}selected{% endif %} {% if not voice.available %}disabled{% endif %}>{{ voice.label }}{% if voice.gender %} · {{ voice.gender }}{% endif %}{% if voice.region %} · giọng {{ voice.region }}{% endif %}{% if not voice.available %} (chưa dùng được){% endif %}</option>{% endfor %}</select></div></div>
+    <div class="row"><div><label>Người quyết định</label><input name="actor" value="web" required></div><div class="voice-picker"><label>Giọng đọc</label><div class="voice-picker-controls"><select name="voice_id" onchange="updateVoicePreview(this)">{% for voice in voices %}<option value="{{ voice.id }}" {% if voice.id == default_voice %}selected{% endif %} {% if not voice.available %}disabled{% endif %} {% if voice.id in preview_voice_ids %}data-preview-url="/voices/{{ voice.engine }}/{{ voice.name }}/preview"{% endif %}>{{ voice.label }}{% if voice.gender %} · {{ voice.gender }}{% endif %}{% if voice.region %} · giọng {{ voice.region }}{% endif %}{% if not voice.available %} (chưa dùng được){% endif %}</option>{% endfor %}</select><button type="button" class="ghost" data-preview-button onclick="playVoicePreview(this)" disabled>▶ Nghe thử</button></div><audio controls preload="none" data-voice-preview hidden></audio></div></div>
     <p class="sub">Giọng áp cho tất cả clip tạo trong lần này. Thả file mẫu vào <code>media/voices/</code> để thêm giọng clone VoxCPM2 — kèm file <code>.txt</code> cùng tên chứa lời đọc mẫu thì clone sát hơn.</p>
     <div class="checks"><label><input type="checkbox" name="include_attribution" value="true" {% if source and source.evidence and source.evidence.license_type.requires_attribution %}checked disabled{% endif %}> Hiện thẻ trích dẫn nguồn trong video</label></div>
     {% if source and source.evidence and source.evidence.license_type.requires_attribution %}<input type="hidden" name="include_attribution" value="true"><p class="note legal">License {{ source.evidence.license_type.value }} bắt buộc ghi nguồn nên không thể tắt.</p>{% endif %}
     <button>Tạo các clip con và chạy pipeline</button>
   </form>
   {% elif not is_root %}
-  <div class="empty">Đây là clip con — clip không cắt tiếp được. Mở <a href="/web/review/{{ root.id }}">video gốc</a> để tạo thêm đoạn.</div>
+  <div class="empty">Đây là clip con — clip không cắt tiếp được. Mở <a href="/review/{{ root.id }}">video gốc</a> để tạo thêm đoạn.</div>
   {% else %}
   <div class="empty">Chỉ chọn được đoạn sau khi transcript đã duyệt. Video gốc đang ở trạng thái “{{ stage_label }}”.</div>
   {% endif %}
@@ -88,8 +88,8 @@
     <td class="num">{% if clip.segment %}{{ clip.segment.start_sec|round(1) }}–{{ clip.segment.end_sec|round(1) }}s{% else %}—{% endif %}</td>
     <td><span class="sub">{{ view.voice_label }}</span></td>
     <td><span class="pill {{ view.stage_value }}" data-live-stage>{{ view.stage_label }}</span></td>
-    <td><span class="sub" data-live-progress-label>Bước {{ view.step }}/{{ view.total }} · {{ view.percent }}% · {{ view.step_label }}</span><div class="progress"><span data-live-progress style="width:{{ view.percent }}%"></span></div><div class="note legal" data-live-error {% if not clip.stage_error %}hidden{% endif %}>{{ clip.stage_error or '' }}</div></td>
-    <td>{% if view.action_kind in ['duyet', 'publish'] %}<button type="button" onclick="event.stopPropagation();openClipDialog({{ clip.id }})">{{ view.action_label }}</button>{% elif view.action_label %}<a class="btn ghost" href="/web/review/{{ clip.id }}" onclick="event.stopPropagation()">{{ view.action_label }}</a>{% else %}<span class="sub">Đang chạy tự động</span>{% endif %}</td>
+    <td><span class="sub" data-live-progress-label>Bước {{ view.step }}/{{ view.total }} · {{ view.percent }}% đã hoàn tất · {{ view.step_label }}</span><div class="progress"><span data-live-progress style="width:{{ view.percent }}%"></span></div><div class="note legal" data-live-error {% if not clip.stage_error %}hidden{% endif %}>{{ clip.stage_error or '' }}</div></td>
+    <td>{% if view.action_kind in ['duyet', 'publish'] %}<button type="button" onclick="event.stopPropagation();openClipDialog({{ clip.id }})">{{ view.action_label }}</button>{% elif view.action_label %}<a class="btn ghost" href="/review/{{ clip.id }}" onclick="event.stopPropagation()">{{ view.action_label }}</a>{% else %}<span class="sub">Đang chạy tự động</span>{% endif %}</td>
   </tr>{% endfor %}
   </tbody></table></div>
 
@@ -100,14 +100,14 @@
     <h3 style="margin-top:14px">Kịch bản tiếng Việt</h3>
     <p style="white-space:pre-wrap">{{ clip.script_vi or 'Chưa có kịch bản.' }}</p>
     {% if view.action_kind == 'duyet' %}
-    <form method="post" action="/web/review/{{ clip.id }}/approve">
+    <form method="post" action="/review/{{ clip.id }}/approve">
       <input type="hidden" name="return_to" value="{{ item.id }}">
       <div class="row"><div><label>Người duyệt</label><input name="actor" required></div><div><label>Ghi chú / lý do</label><input name="notes"></div></div>
-      <div class="actions"><button>Duyệt — cho phép đăng</button><button class="ghost" formaction="/web/review/{{ clip.id }}/rewrite">Trả về viết lại</button><button class="danger" formaction="/web/review/{{ clip.id }}/reject">Từ chối</button></div>
+      <div class="actions"><button>Duyệt — cho phép đăng</button><button class="ghost" formaction="/review/{{ clip.id }}/rewrite">Trả về viết lại</button><button class="danger" formaction="/review/{{ clip.id }}/reject">Từ chối</button></div>
       <p class="sub">Trả về viết lại và từ chối đều bắt buộc ghi lý do.</p>
     </form>
     {% elif view.action_kind == 'publish' %}
-    <form method="post" action="/web/review/{{ clip.id }}/publish">
+    <form method="post" action="/review/{{ clip.id }}/publish">
       <input type="hidden" name="return_to" value="{{ item.id }}">
       <div class="row"><div><label>Người xuất bản</label><input name="actor" required></div></div>
       <div class="actions"><button {% if not publish_enabled %}disabled{% endif %}>Xuất bản</button></div>
@@ -122,7 +122,7 @@
   {% elif is_root %}
   <div class="empty">Chưa cắt clip con nào từ video gốc này. Sang tab “Tạo clip” để chọn đoạn.</div>
   {% else %}
-  <div class="empty">Clip này chưa có thành phẩm. Mở <a href="/web/review/{{ root.id }}">video gốc</a> để xem toàn bộ clip anh em.</div>
+  <div class="empty">Clip này chưa có thành phẩm. Mở <a href="/review/{{ root.id }}">video gốc</a> để xem toàn bộ clip anh em.</div>
   {% endif %}
 </section>
 

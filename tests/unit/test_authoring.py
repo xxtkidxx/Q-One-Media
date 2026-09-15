@@ -99,9 +99,14 @@ def test_thieu_ten_nguoi_tao_thi_tu_choi(uow, clock, tmp_path):
         _create(uow, clock, tmp_path, author="   ")
 
 
-def test_thoi_luong_ngoai_bien_thi_tu_choi(uow, clock, tmp_path):
+def test_video_dai_tuy_y_duoc_chap_nhan(uow, clock, tmp_path):
+    result = _create(uow, clock, tmp_path, target_sec=600)
+    assert result.item.duration_sec == 600
+
+
+def test_thoi_luong_khong_duong_thi_tu_choi(uow, clock, tmp_path):
     with pytest.raises(InvariantViolation):
-        _create(uow, clock, tmp_path, target_sec=600)
+        _create(uow, clock, tmp_path, target_sec=0)
 
 
 def test_chua_do_toc_do_doc_thi_khong_lap_duoc_ngan_sach(uow, clock, tmp_path):

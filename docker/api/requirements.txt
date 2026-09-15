@@ -8,6 +8,7 @@ pydantic-settings==2.7.0
 # --- Mat tien web noi bo (Jinja2, khong SPA) ---
 jinja2==3.1.5
 python-multipart==0.0.20
+itsdangerous==2.2.0
 
 psycopg[binary]==3.2.3
 sqlalchemy==2.0.36

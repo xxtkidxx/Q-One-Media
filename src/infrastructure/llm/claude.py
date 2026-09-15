@@ -231,6 +231,11 @@ class ClaudeScriptWriter(_ClaudeBase):
             "Transcript nguồn của đoạn này:",
             transcript,
         ]
+        if end - start >= 120:
+            parts.insert(2,
+                "Đây là video dài, không phải short: phải chuyển tải đầy đủ nội dung, "
+                "nhắm 80–95% ngân sách âm tiết; không được tóm tắt thành một đoạn ngắn."
+            )
         if glossary:
             parts += [
                 "",
@@ -254,6 +259,32 @@ class ClaudeScriptWriter(_ClaudeBase):
         script = str(data.get("script_vi", "")).strip()
         if not script:
             raise LlmFailed("model trả kịch bản rỗng")
+        estimated_syllables = len(script.split())
+        minimum_syllables = int(max_syllables * 0.6)
+        if end - start >= 120 and estimated_syllables < minimum_syllables:
+            expansion_prompt = "\n".join([
+                f"Video dài {end - start:.1f} giây; ngân sách tối đa {max_syllables} âm tiết.",
+                f"Bản nháp dưới đây chỉ có khoảng {estimated_syllables} âm tiết, quá ngắn.",
+                f"Hãy MỞ RỘNG bản nháp thành {minimum_syllables}–"
+                f"{int(max_syllables * 0.95)} âm tiết, bổ sung các dữ kiện và "
+                "giải thích còn thiếu từ transcript; không lặp câu, không bịa thêm.",
+                "",
+                "Bản nháp cần mở rộng:",
+                script,
+                "",
+                "Transcript nguồn:",
+                transcript,
+            ])
+            data = self._call_tool(
+                system=SCRIPT_SYSTEM, prompt=expansion_prompt, tool=SCRIPT_TOOL
+            )
+            script = str(data.get("script_vi", "")).strip()
+            estimated_syllables = len(script.split())
+        if end - start >= 120 and estimated_syllables < minimum_syllables:
+            raise LlmFailed(
+                f"kịch bản quá ngắn cho video {end - start:.1f}s: khoảng "
+                f"{estimated_syllables}/{max_syllables} âm tiết"
+            )
         log.info(
             "llm.script.done",
             model_estimate=data.get("syllable_estimate"),

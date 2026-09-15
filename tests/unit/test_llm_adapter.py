@@ -19,6 +19,7 @@ from src.infrastructure.llm.claude import (
     load_glossary_json,
 )
 from src.infrastructure.llm.gemini import GeminiSegmentAdvisor
+from src.infrastructure.llm.openai import OpenAiScriptWriter, OpenAiSegmentAdvisor
 from src.infrastructure.llm.registry import build_script_writer, build_segment_advisor
 from src.shared.config import LLMSettings
 
@@ -60,6 +61,11 @@ def test_gemini_thieu_api_key_thi_bao_dung_ten_bien():
         GeminiSegmentAdvisor(api_key="")
 
 
+def test_openai_thieu_api_key_thi_bao_dung_ten_bien():
+    with pytest.raises(LlmRejected, match="OPENAI_API_KEY"):
+        OpenAiSegmentAdvisor(api_key="")
+
+
 def test_registry_chon_provider_da_cau_hinh():
     gemini = LLMSettings(
         provider="gemini", gemini_api_key="g-key", model="gemini-3.5-flash-lite"
@@ -68,6 +74,42 @@ def test_registry_chon_provider_da_cau_hinh():
 
     anthropic = LLMSettings(provider="anthropic", api_key="a-key", model="claude-test")
     assert isinstance(build_script_writer(anthropic), ClaudeScriptWriter)
+
+    openai = LLMSettings(provider="openai", openai_api_key="o-key")
+    assert isinstance(build_segment_advisor(openai), OpenAiSegmentAdvisor)
+    assert isinstance(build_script_writer(openai), OpenAiScriptWriter)
+
+
+def test_openai_doc_json_schema_va_doc_ket_qua(monkeypatch):
+    captured = {}
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            content = (
+                '{"proposals": [{"start_sec": 1, "end_sec": 61, '
+                '"rationale": "SPC"}]}'
+            )
+            return {"choices": [{"message": {"content": content}}]}
+
+    def fake_post(url, **kwargs):
+        captured.update(url=url, **kwargs)
+        return Response()
+
+    monkeypatch.setattr("src.infrastructure.llm.openai.httpx.post", fake_post)
+    advisor = OpenAiSegmentAdvisor(api_key="o-key", model="gpt-test")
+    assert advisor.propose(transcript="[00:01] SPC", duration_sec=100) == [
+        (1.0, 61.0, "SPC")
+    ]
+    assert captured["headers"]["Authorization"] == "Bearer o-key"
+    schema = captured["json"]["response_format"]["json_schema"]
+    assert schema["strict"] is True and schema["name"] == "de_xuat_doan"
+    assert schema["schema"]["additionalProperties"] is False
+    assert schema["schema"]["properties"]["proposals"]["items"]["additionalProperties"] is False
 
 
 def test_registry_tu_choi_provider_khong_ho_tro():
@@ -171,6 +213,49 @@ def test_prompt_viet_kich_ban_co_ngan_sach_va_bang_thuat_ngu():
     assert "330 âm tiết" in prompt
     assert "control chart → biểu đồ kiểm soát" in prompt
     assert "60.0 giây" in prompt
+
+
+def test_video_dai_khong_chap_nhan_kich_ban_tom_tat_qua_ngan():
+    writer = StubWriter({
+        "script_vi": "đoạn tóm tắt quá ngắn",
+        "syllable_estimate": 5,
+        "vietnam_context_sentence": "vn",
+    })
+    with pytest.raises(LlmFailed, match="quá ngắn"):
+        writer.write(
+            transcript="nội dung nguồn dài",
+            segment=(1.0, 373.0),
+            max_syllables=1316,
+            glossary={},
+        )
+    assert "không được tóm tắt" in writer.prompts[0]
+    assert "MỞ RỘNG" in writer.prompts[1]
+
+
+def test_video_dai_tu_dong_mo_rong_ban_nhap_ngan():
+    class ExpandingWriter(StubWriter):
+        def __init__(self):
+            super().__init__({})
+            self.responses = [
+                {"script_vi": "quá ngắn", "syllable_estimate": 2,
+                 "vietnam_context_sentence": "vn"},
+                {"script_vi": " ".join(["tiếng"] * 800), "syllable_estimate": 800,
+                 "vietnam_context_sentence": "vn"},
+            ]
+
+        def _call_tool(self, *, system, prompt, tool):
+            self.prompts.append(prompt)
+            return self.responses.pop(0)
+
+    writer = ExpandingWriter()
+    script = writer.write(
+        transcript="nội dung nguồn dài",
+        segment=(1.0, 373.0),
+        max_syllables=1316,
+        glossary={},
+    )
+    assert len(script.split()) == 800
+    assert "MỞ RỘNG" in writer.prompts[1]
 
 
 def test_viet_lai_thi_prompt_mang_theo_ban_cu_va_ly_do():

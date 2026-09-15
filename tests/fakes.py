@@ -133,6 +133,12 @@ class FakeItemRepository:
             out[i.stage] = out.get(i.stage, 0) + 1
         return out
 
+    def list_children(self, parent_item_id: int) -> list[Item]:
+        return sorted(
+            (item for item in self._rows.values() if item.parent_item_id == parent_item_id),
+            key=lambda item: item.clip_index,
+        )
+
     def update(self, item: Item) -> None:
         assert item.id is not None
         self._rows[item.id] = item

@@ -24,7 +24,6 @@ Bốn nguồn giọng, đúng theo thứ tự ưu tiên của dự án:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from importlib.util import find_spec
 from pathlib import Path
 
 from src.infrastructure.tts.vieneu import PRESETS as VIENEU_PRESETS
@@ -32,6 +31,7 @@ from src.shared.config import ConfigError, Settings
 
 VOICE_DIR_NAME = "voices"
 AUDIO_SUFFIXES = (".wav", ".mp3", ".flac", ".m4a")
+SYSTEM_PREVIEW_TEXT = "Xin chào, đây là giọng đọc thử cho video của Q One Media."
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,6 +45,7 @@ class VoiceOption:
     available: bool = True
     ref_path: Path | None = None
     ref_text: str | None = None
+    preview_path: Path | None = None
 
     @property
     def name(self) -> str:
@@ -69,7 +70,6 @@ FPTAI_VOICES: tuple[tuple[str, str, str, str], ...] = (
 # 20 giọng dựng sẵn của VieNeu-TTS v3 Turbo — miễn phí, Apache-2.0, model card
 # cho phép dùng thương mại (kiểm ngày 15/09/2026). Đây là nguồn giọng "dùng được
 # ngay" lớn nhất của dự án: VoxCPM2 clone tốt nhưng phải có audio mẫu trước.
-VIENEU_AVAILABLE_NOTE = "Cần cài gói `vieneu` trong image worker"
 
 # Hai giọng edge đã xác minh ngày 14/09/2026 bằng ``edge_tts.list_voices()`` —
 # đúng hai, không phải "một vài" (G0.11).
@@ -104,6 +104,11 @@ def list_voices(settings: Settings) -> list[VoiceOption]:
             ),
             ref_path=default_ref,
             ref_text=settings.tts.voice_ref_text,
+            preview_path=(
+                default_ref
+                if default_ref and default_ref.is_file()
+                else settings.media_root / "work" / "voice-previews" / "voxcpm-default.wav"
+            ),
         )
     )
     directory = voices_dir(settings)
@@ -122,6 +127,7 @@ def list_voices(settings: Settings) -> list[VoiceOption]:
                         else "Thiếu file .txt lời đọc mẫu — clone kém sát hơn"
                     ),
                     ref_path=sample,
+                    preview_path=sample,
                     ref_text=(
                         script.read_text(encoding="utf-8").strip()
                         if script.is_file() else None
@@ -129,7 +135,7 @@ def list_voices(settings: Settings) -> list[VoiceOption]:
                 )
             )
 
-    has_vieneu = find_spec("vieneu") is not None
+
     for slug, name, gender, region in VIENEU_PRESETS:
         options.append(
             VoiceOption(
@@ -138,8 +144,12 @@ def list_voices(settings: Settings) -> list[VoiceOption]:
                 engine="vieneu",
                 gender=gender,
                 region=region,
-                available=has_vieneu,
-                note="" if has_vieneu else VIENEU_AVAILABLE_NOTE,
+                # Catalog chạy trong API, còn engine nặng chỉ được cài trong worker.
+                # Kiểm tra import tại đây sẽ luôn khóa nhầm giọng dù worker dùng được.
+                available=True,
+                preview_path=(
+                    settings.media_root / "work" / "voice-previews" / f"vieneu-{slug}.wav"
+                ),
             )
         )
 
@@ -167,6 +177,12 @@ def list_voices(settings: Settings) -> list[VoiceOption]:
                 region="Bắc",
                 available=not settings.is_prod,
                 note="Chỉ dùng cho dev; điều khoản thương mại không rõ ràng",
+                preview_path=(
+                    settings.media_root
+                    / "work"
+                    / "voice-previews"
+                    / f"edge-{name}.mp3"
+                ),
             )
         )
     return options

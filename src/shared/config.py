@@ -60,6 +60,8 @@ class LLMSettings:
     api_key: str = ""
     provider: str = "gemini"
     gemini_api_key: str = ""
+    openai_api_key: str = ""
+    openai_model: str = "gpt-5.6-luna"
     model: str = "gemini-3.5-flash-lite"
     model_hard: str = "gemini-3.6-pro"
 
@@ -88,6 +90,7 @@ class WebSettings:
 
     user: str | None = None
     password: str | None = None
+    session_secret: str = "dev-only-q-one-media-session-secret"
 
     @property
     def enabled(self) -> bool:
@@ -155,12 +158,11 @@ class Settings:
             raise ConfigError(
                 "TTS_ENGINE=edge chỉ dùng cho dev. Production dùng voxcpm hoặc fptai"
             )
-        if self.app_env == "prod" and not self.web.enabled:
+        if self.app_env == "prod" and len(self.web.session_secret) < 32:
             # Chặn ở đây thay vì tin vào việc bind 127.0.0.1: một lần thêm reverse
             # proxy là trang duyệt nội dung thành công khai, và không ai nhận ra.
             raise ConfigError(
-                "APP_ENV=prod bắt buộc có WEB_USER và WEB_PASSWORD — "
-                "mặt tiền web cho phép duyệt và publish nội dung"
+                "APP_ENV=prod bắt buộc WEB_SESSION_SECRET dài ít nhất 32 ký tự"
             )
         object.__setattr__(self, "paths", MediaPaths(self.media_root))
 
@@ -182,6 +184,8 @@ def load_settings() -> Settings:
             api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             provider=_env("LLM_PROVIDER", "gemini").strip().lower(),
             gemini_api_key=os.environ.get("GEMINI_API_KEY", ""),
+            openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
+            openai_model=_env("OPENAI_MODEL", "gpt-5.6-luna"),
             model=_env("LLM_MODEL", "gemini-3.5-flash-lite"),
             model_hard=_env("LLM_MODEL_HARD", "gemini-3.6-pro"),
         ),
@@ -195,6 +199,9 @@ def load_settings() -> Settings:
         web=WebSettings(
             user=os.environ.get("WEB_USER") or None,
             password=os.environ.get("WEB_PASSWORD") or None,
+            session_secret=_env(
+                "WEB_SESSION_SECRET", "dev-only-q-one-media-session-secret"
+            ),
         ),
         visuals=VisualSettings(
             provider=_env("IMAGE_PROVIDER", "none").strip().lower(),

@@ -153,6 +153,7 @@ def send_back_for_rewrite(
         item = _get(uow, item_id)
         item.rewrite_script(reason)
         uow.items.update(item)
+        uow.jobs.enqueue(Job(task=JobTask.WRITE_SCRIPT, item_id=item_id))
         uow.audit.record(
             entity="item",
             entity_id=item_id,

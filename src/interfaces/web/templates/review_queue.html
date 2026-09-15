@@ -31,7 +31,7 @@
         {% if e.item.needs_reframe %}<br><span class="pill warn">cần reframe</span>{% endif %}
       </td>
       <td class="num">{{ e.expected_minutes[0] }}–{{ e.expected_minutes[1] }} phút</td>
-      <td><a href="/web/review/{{ e.item.id }}">Mở duyệt →</a></td>
+      <td><a href="/review/{{ e.item.id }}">Mở duyệt →</a></td>
     </tr>
   {% else %}
     <tr><td colspan="6" class="empty">

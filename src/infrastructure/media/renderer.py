@@ -80,15 +80,22 @@ class FfmpegRenderer:
             )
 
         # 3. Trộn audio: giọng Việt lên nền tiếng máy
+        target_sec = req.end_sec - req.start_sec
         if req.background_audio is not None and req.background_audio.exists():
             mixed_audio = ffmpeg.mix_voice_over_background(
-                req.voice_audio, req.background_audio, req.work_dir / "mixed.wav"
+                req.voice_audio,
+                req.background_audio,
+                req.work_dir / "mixed.wav",
+                target_sec=target_sec,
+                background_start_sec=req.start_sec,
             )
         else:
             # Nguồn không có nền dùng được (video im lặng, hoặc Demucs không tách
             # ra gì). Dùng giọng trần — nói rõ trong log vì video sẽ nghe khô hơn.
             log.warning("render.background.missing", reason="dùng giọng trần")
-            mixed_audio = req.voice_audio
+            mixed_audio = ffmpeg.pad_audio(
+                req.voice_audio, req.work_dir / "voice-padded.wav", target_sec=target_sec
+            )
 
         # 4. Ghép hình đã reframe với audio đã trộn
         muxed = ffmpeg.mux(framed, mixed_audio, req.work_dir / "muxed.mp4")

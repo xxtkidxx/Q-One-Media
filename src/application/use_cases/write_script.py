@@ -55,8 +55,11 @@ def create_manual_clips(
         attribution_required = bool(
             source.evidence and source.evidence.license_type.requires_attribution
         )
+        existing_children = uow.items.list_children(item_id)
+        next_clip_index = max((item.clip_index for item in existing_children), default=0) + 1
         created: list[Item] = []
-        for index, (start, end) in enumerate(ranges, 1):
+        for offset, (start, end) in enumerate(ranges):
+            index = next_clip_index + offset
             segment = Segment(start, end, rationale="Người dùng chọn thủ công")
             if end > parent.duration_sec:
                 raise InvariantViolation(

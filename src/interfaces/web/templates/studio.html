@@ -35,19 +35,19 @@
     <td><span class="pill">{% if shot.kind.value=='upload' %}Ảnh/video của bạn{% elif shot.kind.value=='stock' %}Kho có license{% elif shot.kind.value=='chart' %}Biểu đồ số liệu{% elif shot.kind.value=='generated' %}AI sinh theo prompt{% else %}Thẻ thương hiệu{% endif %}</span></td>
     <td class="num">{{ shot.seconds }}</td>
     <td>{{ shot.caption or shot.prompt or '—' }}{% if shot.data %}<br><span class="sub mono">{% for label, value in shot.data %}{{ label }}={{ value }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}</td>
-    <td><form method="post" action="/web/studio/{{ item.id }}/shots/{{ loop.index0 }}/delete"><button class="close" title="Xoá cảnh">×</button></form></td>
+    <td><form method="post" action="/studio/{{ item.id }}/shots/{{ loop.index0 }}/delete"><button class="close" title="Xoá cảnh">×</button></form></td>
   </tr>{% else %}<tr><td colspan="5" class="empty">Chưa có cảnh nào.</td></tr>{% endfor %}
   </tbody></table></div>
 
   <details style="margin-top:12px"><summary><strong>＋ Thêm cảnh</strong></summary>
-    <form method="post" action="/web/studio/{{ item.id }}/shots" enctype="multipart/form-data">
+    <form method="post" action="/studio/{{ item.id }}/shots" enctype="multipart/form-data">
       <div class="row">
         <div><label>Loại cảnh</label><select name="kind"><option value="upload">Ảnh/video của bạn</option><option value="chart">Biểu đồ từ số liệu</option><option value="generated">AI sinh theo prompt</option><option value="brand_card">Thẻ thương hiệu</option></select></div>
         <div><label>Dài (giây)</label><input type="number" name="seconds" value="6" step="0.5" min="1.5" max="12"></div>
         <div><label>Người thêm</label><input name="actor" value="web" required></div>
       </div>
       <label>Chữ hiện trên cảnh</label><input name="caption" placeholder="Ví dụ: Cpk đo cái gì">
-      <label>File ảnh hoặc video (khi chọn “Ảnh/video của bạn”)</label><input type="file" name="media" accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm">
+      <label>File ảnh hoặc video (khi chọn “Ảnh/video của bạn”)</label><input type="file" name="media" accept="image/png,image/jpeg,imagep,video/mp4,video/quicktime,videom">
       <label>Prompt cho AI (khi chọn “AI sinh theo prompt”)</label><input name="prompt" placeholder="Ví dụ: dây chuyền lắp ráp điện tử, ánh sáng lạnh">
       <label>Số liệu biểu đồ — mỗi dòng một cột, dạng <code>Nhãn = số</code></label><textarea name="chart_data" placeholder="T1 = 1.10&#10;T2 = 1.33&#10;T3 = 1.41"></textarea>
       <p class="sub">{% if image_provider %}Đang dùng nhà cung cấp ảnh: <strong>{{ image_provider }}</strong>. AI chỉ dùng cho ảnh bối cảnh — số liệu luôn đi qua cảnh biểu đồ.{% else %}Chưa cấu hình nhà cung cấp sinh ảnh (<code>IMAGE_PROVIDER</code>), cảnh AI sẽ tự rơi về thẻ thương hiệu.{% endif %}</p>
@@ -55,7 +55,7 @@
     </form>
   </details>
 
-  {% if row.video_url %}<div class="two-col" style="margin-top:14px"><video controls preload="metadata" src="{{ row.video_url }}"></video><div><h3>Thành phẩm</h3><p class="sub">Duyệt và xuất bản tại <a href="/web/review/{{ item.id }}">trang review</a>.</p></div></div>{% endif %}
+  {% if row.video_url %}<div class="two-col" style="margin-top:14px"><video controls preload="metadata" src="{{ row.video_url }}"></video><div><h3>Thành phẩm</h3><p class="sub">Duyệt và xuất bản tại <a href="/review/{{ item.id }}">trang review</a>.</p></div></div>{% endif %}
 </section>
 {% else %}
 <div class="card"><div class="empty">Chưa có video nào. Bấm “＋ Video mới” để nhập đề bài đầu tiên.</div></div>
@@ -63,17 +63,17 @@
 
 <dialog id="briefModal" class="modal"><div class="modal-inner">
   <div class="modal-head"><div><h2 style="margin:0">Video mới từ đề bài</h2><p class="sub">Viết đề bài như giao việc cho người viết: nói rõ nội dung, người xem là ai, và giọng điệu.</p></div><button class="close" onclick="document.getElementById('briefModal').close()">×</button></div>
-  <form method="post" action="/web/studio">
+  <form method="post" action="/studio">
     <label>Tiêu đề</label><input name="title" placeholder="Ví dụ: Cpk trong 60 giây">
     <label>Đề bài</label><textarea name="brief" required placeholder="Ví dụ: Giải thích Cpk cho quản lý nhà máy. Nêu khác biệt giữa Cp và Cpk, vì sao Cpk cao vẫn có thể ra hàng lỗi. Kết bằng việc người xem kiểm tra được ngay hôm nay."></textarea>
     <div class="row">
-      <div><label>Thời lượng (giây)</label><input type="number" name="target_sec" value="60" min="{{ seg_min|round(0)|int }}" max="{{ seg_max|round(0)|int }}" step="1"></div>
+      <div><label>Thời lượng (giây)</label><input type="number" name="target_sec" value="60" min="1" step="1"></div>
       <div><label>Người tạo</label><input name="actor" value="web" required></div>
     </div>
     <label>Giọng đọc</label>
     <select name="voice_id">{% for voice in voices %}<option value="{{ voice.id }}" {% if voice.id == default_voice %}selected{% endif %} {% if not voice.available %}disabled{% endif %}>{{ voice.label }}{% if voice.gender %} · {{ voice.gender }}{% endif %}{% if voice.region %} · giọng {{ voice.region }}{% endif %}{% if voice.note %} — {{ voice.note }}{% endif %}</option>{% endfor %}</select>
     <p class="sub">Thả file mẫu vào <code>media/voices/</code> để thêm giọng clone VoxCPM2; kèm file <code>.txt</code> cùng tên chứa lời đọc mẫu thì clone sát hơn.</p>
-    <p class="sub">Biên cho phép {{ seg_min|round(0)|int }}–{{ seg_max|round(0)|int }} giây, tốt nhất {{ seg_best_min|round(0)|int }}–{{ seg_best_max|round(0)|int }} giây. Kịch bản được viết đúng trong ngân sách âm tiết của khung này.</p>
+    <p class="sub">Khuyến cáo {{ seg_best_min|round(0)|int }}–{{ seg_best_max|round(0)|int }} giây cho video ngắn; bạn vẫn có thể đặt thời lượng dài tùy ý. Kịch bản được viết theo ngân sách âm tiết của thời lượng đã chọn.</p>
     <p class="note legal">Model không được bịa số liệu, tên khách hàng hay kết quả dự án. Con số cụ thể thì bạn đưa vào đề bài hoặc dựng thành cảnh biểu đồ.</p>
     <div class="actions"><button>Viết kịch bản và chạy pipeline</button><button type="button" class="ghost" onclick="document.getElementById('briefModal').close()">Hủy</button></div>
   </form>

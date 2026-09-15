@@ -25,6 +25,12 @@ def client():
     from src.interfaces.api.main import create_app
 
     with TestClient(create_app()) as c:
+        response = c.post(
+            "/login",
+            data={"username": "admin", "password": "admin", "next": "/"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
         yield c
 
 
@@ -46,7 +52,7 @@ def clean_db(client):
 # ---------------- Trang hiển thị được ----------------
 
 
-@pytest.mark.parametrize("path", ["/web", "/web/sources", "/web/review"])
+@pytest.mark.parametrize("path", ["/", "/sources", "/review"])
 def test_cac_trang_hien_duoc_khi_khong_co_du_lieu(client, path):
     """Trang trống phải nói rõ là trống, không được nổ."""
     resp = client.get(path)
@@ -55,7 +61,56 @@ def test_cac_trang_hien_duoc_khi_khong_co_du_lieu(client, path):
 
 
 def test_trang_nguon_loc_theo_trang_thai_khong_hop_le_thi_bao_400(client):
-    assert client.get("/web/sources?status=khong-ton-tai").status_code == 400
+    assert client.get("/sources?status=khong-ton-tai").status_code == 400
+
+
+def test_login_logout_va_phan_quyen_viewer(client):
+    from fastapi.testclient import TestClient
+
+    from src.interfaces.api.main import create_app
+
+    with TestClient(create_app()) as anonymous:
+        response = anonymous.get("/sources", follow_redirects=False)
+        assert response.status_code == 303
+        assert response.headers["location"].startswith("/login?next=")
+
+        response = anonymous.post(
+            "/login",
+            data={"username": "viewer", "password": "viewer", "next": "/sources"},
+            follow_redirects=False,
+        )
+        assert response.status_code == 303
+        assert anonymous.get("/sources").status_code == 200
+        assert anonymous.get("/accounts").status_code == 403
+        assert anonymous.post("/sources", data={}).status_code == 403
+        assert anonymous.post("/logout", follow_redirects=False).status_code == 303
+
+
+def test_admin_co_trang_quan_ly_tai_khoan_va_audit(client):
+    accounts = client.get("/accounts")
+    assert accounts.status_code == 200
+    assert "Quản lý tài khoản" in accounts.text
+    audit = client.get("/audit")
+    assert audit.status_code == 200
+    assert "Nhật ký Audit" in audit.text
+
+
+def test_giao_dien_co_light_dark_theme_va_menu_avatar(client):
+    page = client.get("/").text
+    assert "qone.portal.theme" in page
+    assert 'href="/static/qone-ui.css"' in page
+    stylesheet = client.get("/static/qone-ui.css")
+    assert stylesheet.status_code == 200
+    assert ".progress>span{display:block;height:100%" in stylesheet.text
+    assert 'data-progress-status="running"' in stylesheet.text
+    assert "grid-template-columns:repeat(15,minmax(0,1fr))" in stylesheet.text
+    assert ".workflow" in stylesheet.text and "overflow:visible" in stylesheet.text
+    assert "aria-valuenow" in page
+    assert "app-dark" in page
+    assert "data-theme-icon" in page
+    assert 'class="profile-avatar"' in page
+    assert 'class="profile-popover"' in page
+    assert "/static/qone-logo-dark.svg" in page
 
 
 # ---------------- Vòng đời qua form ----------------
@@ -74,7 +129,7 @@ def _declare(client, **over):
         "notes": "",
     }
     data.update(over)
-    return client.post("/web/sources", data=data, follow_redirects=False)
+    return client.post("/sources", data=data, follow_redirects=False)
 
 
 def _approve(client, source_id, **over):
@@ -86,7 +141,7 @@ def _approve(client, source_id, **over):
     }
     data.update(over)
     return client.post(
-        f"/web/sources/{source_id}/approve", data=data, follow_redirects=False
+        f"/sources/{source_id}/approve", data=data, follow_redirects=False
     )
 
 
@@ -103,12 +158,12 @@ def test_khai_bao_roi_duyet_roi_nap_url(client):
     ).status_code == 303
 
     resp = client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=form01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    dashboard = client.get("/web").text
+    dashboard = client.get("").text
     assert "Tổng nội dung" in dashboard
     assert "Nguồn #1" in dashboard
 
@@ -121,15 +176,15 @@ def test_them_nguon_video_chi_xep_tai_khi_nguoi_dung_bam_start(client):
         external_owner_id="",
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/web/sources"
-    assert client.get("/sources/1").json()["status"] == "pending"
+    assert resp.headers["location"] == "/sources"
+    assert client.get("/api/sources/1").json()["status"] == "pending"
 
     _approve(client, 1, may_republish="true")
-    page = client.get("/web/sources").text
+    page = client.get("/sources").text
     assert "Start tải video" in page
-    resp = client.post("/web/sources/1/start", follow_redirects=False)
+    resp = client.post("/sources/1/start", follow_redirects=False)
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/web/sources?auto_started=1"
+    assert resp.headers["location"] == "/sources?auto_started=1"
 
     from src.interfaces.api.deps import get_uow
 
@@ -143,13 +198,14 @@ def test_them_nguon_video_chi_xep_tai_khi_nguoi_dung_bam_start(client):
         ).scalar_one()
     assert item == (1, "inbox")
     assert task == "download"
-    status = client.get("/web/item-status").json()["items"]
+    status = client.get("/item-status").json()["items"]
     assert status[0]["id"] == 1
     assert status[0]["stage"] == "inbox"
     assert status[0]["progress"] == 5
     assert status[0]["step"] == 1
     assert status[0]["total_steps"] == 15
-    assert status[0]["label"] == "Đang tải video"
+    assert status[0]["label"] == "Chờ xử lý: Tải video"
+    assert status[0]["job_status"] == "pending"
 
 
 def test_trang_nguon_mac_dinh_hien_tat_ca_va_co_bo_loc_phan_trang_popup(client):
@@ -162,7 +218,7 @@ def test_trang_nguon_mac_dinh_hien_tat_ca_va_co_bo_loc_phan_trang_popup(client):
     )
     _approve(client, 2, may_republish="true")
 
-    page = client.get("/web/sources").text
+    page = client.get("/sources").text
     assert "Nguồn đang chờ" in page
     assert "Nguồn đã duyệt" in page
     assert "Tất cả" in page
@@ -172,14 +228,14 @@ def test_trang_nguon_mac_dinh_hien_tat_ca_va_co_bo_loc_phan_trang_popup(client):
     assert "type=\"file\"" in page
     # Nạp video = tạo nguồn mới (không còn ô chọn nguồn có sẵn); nạp vào nguồn đã có
     # là việc riêng của nút Upload file trên từng dòng.
-    assert "action=\"/web/uploads\"" in page
+    assert "action=\"/uploads\"" in page
     assert "name=\"source_id\"" not in page
     assert "openRowUpload(2," in page
-    assert "action=\"/web/items\"" not in page
+    assert "action=\"/items\"" not in page
     assert "Gợi ý điền" in page
     assert "Thông tin bổ sung (không bắt buộc)" in page
 
-    searched = client.get("/web/sources?q=đã+duyệt").text
+    searched = client.get("/sources?q=đã+duyệt").text
     assert "Nguồn đã duyệt" in searched
     assert "Nguồn đang chờ" not in searched
 
@@ -207,13 +263,13 @@ def test_upload_video_gan_nguon_va_xep_buoc_tach_audio(client, monkeypatch):
         )(),
     )
     resp = client.post(
-        "/web/sources/1/uploads",
+        "/sources/1/uploads",
         data={"actor": "quan.nguyen"},
         files={"video": ("demo.mp4", b"video-test", "video/mp4")},
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/web/sources?uploaded=1"
+    assert resp.headers["location"] == "/sources?uploaded=1"
 
     uow = get_uow()
     with uow:
@@ -258,7 +314,7 @@ def test_nut_nap_video_tao_nguon_moi_va_van_qua_license_gate(client, monkeypatch
         )(),
     )
     resp = client.post(
-        "/web/uploads",
+        "/uploads",
         data={
             "url": "https://www.youtube.com/watch?v=newsrc01",
             "display_name": "Nguồn nạp tay",
@@ -274,7 +330,7 @@ def test_nut_nap_video_tao_nguon_moi_va_van_qua_license_gate(client, monkeypatch
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/web/sources?uploaded=1"
+    assert resp.headers["location"] == "/sources?uploaded=1"
 
     uow = get_uow()
     with uow:
@@ -304,7 +360,7 @@ def test_nap_video_thieu_giay_phep_thi_khong_de_lai_file_rac(client, monkeypatch
 
     monkeypatch.setattr(routes.ffmpeg, "probe", lambda _path: pytest.fail("không được probe"))
     resp = client.post(
-        "/web/uploads",
+        "/uploads",
         data={
             "url": "https://www.youtube.com/watch?v=dup01",
             "platform": "youtube",
@@ -333,7 +389,7 @@ def test_khai_bao_trung_thi_hien_trang_loi_de_doc_khong_phai_500(client):
 
 def test_nap_url_khong_thuoc_nguon_nao_thi_noi_ro_phai_lam_gi(client):
     resp = client.post(
-        "/web/items", data={"url": "https://vimeo.com/999", "actor": "q"},
+        "/items", data={"url": "https://vimeo.com/999", "actor": "q"},
         follow_redirects=False,
     )
     assert resp.status_code == 200
@@ -344,7 +400,7 @@ def test_nguon_chua_duyet_thi_url_bi_chan_va_trang_noi_ro_ly_do(client):
     """Người dùng phải hiểu vì sao bị chặn, không chỉ thấy nó không chạy."""
     _declare(client)
     resp = client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=blocked", "actor": "q"},
         follow_redirects=False,
     )
@@ -364,10 +420,10 @@ def test_checkbox_khong_tick_thi_quyen_khong_duoc_cap(client):
     """
     _declare(client)
     _approve(client, 1, may_republish="true")  # chỉ tick một quyền
-    page = client.get("/web/sources?status=approved").text
+    page = client.get("/sources?status=approved").text
     assert "chưa được sửa audio" in page
 
-    detail = client.get("/sources/1").json()
+    detail = client.get("/api/sources/1").json()
     assert detail["scope"]["may_republish"] is True
     assert detail["scope"]["may_modify_audio"] is False
     assert detail["scope"]["may_translate"] is False
@@ -376,14 +432,14 @@ def test_checkbox_khong_tick_thi_quyen_khong_duoc_cap(client):
 def test_trang_nguon_canh_bao_khi_thieu_external_owner_id(client):
     """Nguồn dạng bao thiếu id chủ kênh thì URL nạp vào sẽ bị chặn — nói trước."""
     _declare(client, external_owner_id="")
-    assert "thiếu external_owner_id" in client.get("/web/sources?status=pending").text
+    assert "thiếu external_owner_id" in client.get("/sources?status=pending").text
 
 
 def test_duyet_khong_nhap_bang_chung_thi_tu_ghi_xac_nhan_noi_bo(client):
     _declare(client)
     resp = _approve(client, 1, evidence_ref="   ")
     assert resp.status_code == 303
-    detail = client.get("/sources/1").json()
+    detail = client.get("/api/sources/1").json()
     assert detail["status"] == "approved"
     assert detail["evidence_ref"].startswith("Xác nhận giấy phép có sẵn bởi")
 
@@ -392,7 +448,7 @@ def test_cc_by_thieu_ghi_nguon_thi_tu_tao_tu_thong_tin_nguon(client):
     _declare(client)
     resp = _approve(client, 1, license_type="cc-by", attribution_text="")
     assert resp.status_code == 303
-    attribution = client.get("/sources/1").json()["attribution_text"]
+    attribution = client.get("/api/sources/1").json()["attribution_text"]
     assert "Form Vendor" in attribution
     assert "youtube.com/@FormVendor" in attribution
 
@@ -405,7 +461,7 @@ def test_nguon_douyin_hien_canh_bao_watermark(client):
         kind="creator-page",
         external_owner_id="MS4w",
     )
-    assert "watermark dán cứng" in client.get("/web/sources?status=pending").text
+    assert "watermark dán cứng" in client.get("/sources?status=pending").text
 
 
 # ---------------- Gate duyệt ----------------
@@ -414,10 +470,10 @@ def test_nguon_douyin_hien_canh_bao_watermark(client):
 def test_duyet_khong_ghi_ten_nguoi_duyet_thi_bi_tu_choi(client):
     """Lỗi quay về đúng trang review, không nhảy sang URL của POST."""
     resp = client.post(
-        "/web/review/1/approve", data={"actor": "  ", "notes": ""}, follow_redirects=False
+        "/review/1/approve", data={"actor": "  ", "notes": ""}, follow_redirects=False
     )
     assert resp.status_code == 303
-    assert resp.headers["location"].startswith("/web/review/1?error=")
+    assert resp.headers["location"].startswith("/review/1?error=")
     assert "Thi%E1%BA%BFu%20t%C3%AAn%20ng%C6%B0%E1%BB%9Di%20duy%E1%BB%87t" in (
         resp.headers["location"]
     )
@@ -425,16 +481,16 @@ def test_duyet_khong_ghi_ten_nguoi_duyet_thi_bi_tu_choi(client):
 
 def test_tu_choi_ma_khong_ghi_ly_do_thi_bi_chan(client):
     resp = client.post(
-        "/web/review/1/reject", data={"actor": "q", "notes": ""}, follow_redirects=False
+        "/review/1/reject", data={"actor": "q", "notes": ""}, follow_redirects=False
     )
     assert resp.status_code == 303
-    assert resp.headers["location"].startswith("/web/review/1?error=")
+    assert resp.headers["location"].startswith("/review/1?error=")
 
 
 def test_tra_ve_viet_lai_ma_khong_ghi_ly_do_thi_bi_chan(client):
     """Lý do được đưa thẳng vào prompt viết lại — để trống là làm bản sau vô ích."""
     resp = client.post(
-        "/web/review/1/rewrite", data={"actor": "q", "notes": ""}, follow_redirects=False
+        "/review/1/rewrite", data={"actor": "q", "notes": ""}, follow_redirects=False
     )
     assert resp.status_code == 303
     assert "prompt" in resp.headers["location"]
@@ -452,7 +508,7 @@ def test_soat_transcript_hien_nguon_va_thong_bao_sau_khi_duyet(client):
         may_commercial_use="true",
     )
     client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=form01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -464,29 +520,29 @@ def test_soat_transcript_hien_nguon_va_thong_bao_sau_khi_duyet(client):
         uow.session.execute(text("UPDATE items SET stage='transcript_review' WHERE id=1"))
         uow.commit()
 
-    page = client.get("/web/transcripts")
+    page = client.get("/transcripts")
     assert "Nguồn #1" in page.text
     assert "Form Vendor" in page.text
 
     resp = client.post(
-        "/web/transcripts/1/approve",
+        "/transcripts/1/approve",
         data={"actor": "quan.nguyen"},
         follow_redirects=False,
     )
     assert resp.status_code == 303
     # Việc kế tiếp sau khi soát transcript là chọn đoạn, và form đó nằm ở trang review.
-    assert resp.headers["location"] == "/web/review/1?approved=1"
+    assert resp.headers["location"] == "/review/1?approved=1"
 
     done = client.get(resp.headers["location"])
     assert "Transcript đã được duyệt" in done.text
-    assert 'action="/web/items/1/clips"' in done.text
+    assert 'action="/items/1/clips"' in done.text
 
 
 def test_bien_tap_transcript_tren_trang_review_rieng(client):
     _declare(client)
     _approve(client, 1, may_modify_audio="true", may_subtitle="true")
     client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=editor01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -512,20 +568,20 @@ def test_bien_tap_transcript_tren_trang_review_rieng(client):
         segments=[{"start": 1, "end": 4, "text": "Câu gốc."}],
     )
 
-    source_page = client.get("/web/sources").text
+    source_page = client.get("/sources").text
     assert "Mở trang review" in source_page
     assert "class=\"subtitle-editor\"" not in source_page
 
-    page = client.get("/web/review/1")
+    page = client.get("/review/1")
     assert page.status_code == 200
     assert "Transcript theo mốc thời gian" in page.text
-    assert 'src="/web/items/1/source-video"' in page.text
+    assert 'src="/items/1/source-video"' in page.text
     assert 'name="start"' in page.text
     assert 'name="text_line"' in page.text
     assert "Lưu & duyệt transcript" in page.text
 
     response = client.post(
-        "/web/items/1/transcript",
+        "/items/1/transcript",
         data={
             "start": [1.5],
             "end": [4.5],
@@ -536,7 +592,7 @@ def test_bien_tap_transcript_tren_trang_review_rieng(client):
         follow_redirects=False,
     )
     assert response.status_code == 303
-    assert response.headers["location"] == "/web/review/1?saved=1"
+    assert response.headers["location"] == "/review/1?saved=1"
     text_value, segments = load_transcript(config.media_root, 1)
     assert text_value == "Câu đã sửa."
     assert segments == [{"start": 1.5, "end": 3.0, "text": "Câu đã sửa."}]
@@ -556,7 +612,7 @@ def test_nguoi_dung_chon_hai_doan_tao_hai_clip_doc_lap(client):
         may_commercial_use="true",
     )
     client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=multi01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -582,7 +638,7 @@ def test_nguoi_dung_chon_hai_doan_tao_hai_clip_doc_lap(client):
     )
 
     resp = client.post(
-        "/web/items/1/clips",
+        "/items/1/clips",
         data={
             "start_sec": [10, 80],
             "end_sec": [70, 140],
@@ -591,7 +647,7 @@ def test_nguoi_dung_chon_hai_doan_tao_hai_clip_doc_lap(client):
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/web/review/1?created=2"
+    assert resp.headers["location"] == "/review/1?created=2"
 
     with uow:
         clips = uow.session.execute(
@@ -611,14 +667,44 @@ def test_nguoi_dung_chon_hai_doan_tao_hai_clip_doc_lap(client):
 
     # Trang nguồn chỉ giữ dòng video gốc; hai clip con gộp thành thống kê. Ba dòng
     # cho cùng một video làm người xem tưởng có ba video khác nhau.
-    source_page = client.get("/web/sources?open_source=1").text
+    source_page = client.get("/sources?open_source=1").text
     assert source_page.count('class="item" data-item-id=') == 1
+    assert 'href="/review/1#clip"' in source_page
+    assert "Chọn đoạn tạo clip" in source_page
     assert "2 clip con" in source_page
     assert "2 · Đã chọn đoạn" in source_page
     assert 'class="source-detail" >' in source_page  # open_source mở sẵn nguồn #1
+    assert 'class="history-branch level-0" open' in source_page
+    assert '<aside class="source-history"><h3>Lịch sử hoạt động</h3>' in source_page
+    assert source_page.index("Video và các clip") < source_page.index("Hồ sơ pháp lý")
+    assert source_page.index("Hồ sơ pháp lý") < source_page.index("Lịch sử hoạt động")
+    assert 'class="history-branch level-1"' in source_page
+    assert source_page.count('class="history-branch level-2"') == 2
+    assert source_page.index("#1-gốc") < source_page.index("#1-1") < source_page.index("#1-2")
 
-    status = client.get("/web/item-status").json()["items"]
+    status = client.get("/item-status").json()["items"]
     assert {row["id"]: row["parent_item_id"] for row in status} == {1: None, 2: 1, 3: 1}
+    first_clip = next(row for row in status if row["id"] == 2)
+    assert first_clip["progress"] == 52
+    assert first_clip["step"] == 8
+    assert first_clip["job_status"] == "pending"
+    assert first_clip["label"] == "Chờ xử lý: Viết kịch bản"
+
+    # Một lần tạo sau phải nối tiếp chỉ số, không quay lại clip 1 và đụng URL unique.
+    again = client.post(
+        "/items/1/clips",
+        data={"start_sec": [145], "end_sec": [170], "actor": "quan.nguyen"},
+        follow_redirects=False,
+    )
+    assert again.status_code == 303
+    with uow:
+        latest = uow.session.execute(
+            text(
+                "SELECT clip_index, item_url FROM items "
+                "WHERE parent_item_id=1 ORDER BY clip_index DESC LIMIT 1"
+            )
+        ).one()
+    assert latest == (3, "https://www.youtube.com/watch?v=multi01#qone-clip-1-3")
 
 
 def test_trang_review_gom_chon_doan_tien_trinh_va_lich_su(client):
@@ -630,7 +716,7 @@ def test_trang_review_gom_chon_doan_tien_trinh_va_lich_su(client):
     _declare(client)
     _approve(client, 1, may_modify_audio="true", may_subtitle="true")
     client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=gather01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -648,15 +734,15 @@ def test_trang_review_gom_chon_doan_tien_trinh_va_lich_su(client):
         )
         uow.commit()
 
-    page = client.get("/web/review/1").text
-    assert 'action="/web/items/1/clips"' in page
+    page = client.get("/review/1").text
+    assert 'action="/items/1/clips"' in page
     assert "data-live-progress" in page
     assert "Lịch sử hoạt động" in page
     assert "<strong>accepted</strong>" in page  # audit thật của bước nạp URL
 
-    source_page = client.get("/web/sources").text
-    assert "/web/items/1/clips" not in source_page
-    assert 'href="/web/review/1"' in source_page
+    source_page = client.get("/sources").text
+    assert "/items/1/clips" not in source_page
+    assert 'href="/review/1#clip"' in source_page
 
 
 def test_trang_review_chia_tab_va_ve_workflow_15_buoc(client):
@@ -664,7 +750,7 @@ def test_trang_review_chia_tab_va_ve_workflow_15_buoc(client):
     _declare(client)
     _approve(client, 1, may_modify_audio="true", may_subtitle="true")
     client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=tabs01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -682,16 +768,17 @@ def test_trang_review_chia_tab_va_ve_workflow_15_buoc(client):
         )
         uow.commit()
 
-    page = client.get("/web/review/1").text
+    page = client.get("/review/1").text
     for tab in ("transcript", "clip", "clips", "lichsu", "nguon"):
         assert f'data-tab-panel="{tab}"' in page
     # Duyệt thành phẩm không còn là tab riêng: nó là popup của từng clip con.
     assert 'data-tab-panel="duyet"' not in page
-    # Sơ đồ 15 bước là tham chiếu chung: mỗi bước mang % của chính nó và KHÔNG tô
-    # theo trạng thái item nào — tô theo item gốc hay clip con đều gây hiểu nhầm.
-    assert page.count('class="wf-step"') == 15
+    # Sơ đồ nằm gọn trong trang và tô rõ tiến trình của đúng item đang mở.
+    assert page.count('class="wf-step ') == 15
     assert "45%" in page
-    assert "wf-step done" not in page and "wf-step current" not in page
+    assert page.count('class="wf-step done"') == 5
+    assert page.count('class="wf-step current"') == 1
+    assert page.count('class="wf-step pending"') == 9
     assert 'data-default-tab="clip"' in page
     assert '<section class="card" data-tab-panel="clip" >' in page  # mở sẵn
     assert 'data-tab-panel="lichsu" hidden' in page
@@ -710,9 +797,9 @@ def test_trang_review_chia_tab_va_ve_workflow_15_buoc(client):
             )
         )
         uow.commit()
-    waiting = client.get("/web/review/1").text
+    waiting = client.get("/review/1").text
     assert 'data-default-tab="clips"' in waiting
-    assert 'action="/web/review/1/approve"' in waiting
+    assert 'action="/review/1/approve"' in waiting
     assert "Kịch bản thử." in waiting
     assert "Duyệt thành phẩm" in waiting
 
@@ -731,7 +818,7 @@ def test_popup_clip_con_co_kich_ban_va_nut_duyet_roi_xuat_ban(client):
         may_commercial_use="true",
     )
     client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=popup01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -756,7 +843,7 @@ def test_popup_clip_con_co_kich_ban_va_nut_duyet_roi_xuat_ban(client):
         segments=[{"start": 0, "end": 150, "text": "Kiểm thử."}],
     )
     client.post(
-        "/web/items/1/clips",
+        "/items/1/clips",
         data={"start_sec": [10], "end_sec": [70], "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -769,24 +856,24 @@ def test_popup_clip_con_co_kich_ban_va_nut_duyet_roi_xuat_ban(client):
         )
         uow.commit()
 
-    page = client.get("/web/review/1").text
+    page = client.get("/review/1").text
     assert 'id="clip-2"' in page  # popup của clip con
     assert "Kịch bản của clip 1." in page
-    assert 'action="/web/review/2/approve"' in page
+    assert 'action="/review/2/approve"' in page
     assert 'name="return_to" value="1"' in page  # duyệt xong ở lại trang video gốc
     assert ">Duyệt thành phẩm<" in page
 
     resp = client.post(
-        "/web/review/2/approve",
+        "/review/2/approve",
         data={"actor": "quan.nguyen", "notes": "", "return_to": "1"},
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"] == "/web/review/1?decided=approve#clips"
+    assert resp.headers["location"] == "/review/1?decided=approve#clips"
 
     # Đã duyệt → việc kế tiếp là xuất bản, và nút đó nằm trong cùng popup.
-    approved_page = client.get("/web/review/1").text
-    assert 'action="/web/review/2/publish"' in approved_page
+    approved_page = client.get("/review/1").text
+    assert 'action="/review/2/publish"' in approved_page
     assert ">Xuất bản<" in approved_page
 
     # Lịch sử rẽ nhánh: nguồn · video gốc · từng clip, không trộn một dòng chảy.
@@ -794,13 +881,11 @@ def test_popup_clip_con_co_kich_ban_va_nut_duyet_roi_xuat_ban(client):
     assert "#1-gốc" in approved_page and "#1-1" in approved_page
 
 
-def test_doan_qua_dai_thi_bao_loi_ngay_tren_trang_review(client):
-    """Đoạn ngoài biên 10–180s là lỗi nghiệp vụ hợp lệ — người dùng phải sửa được
-    tại chỗ, không bị đẩy sang URL của POST rồi phải bấm back."""
+def test_doan_dai_hon_180_giay_duoc_tao_binh_thuong(client):
     _declare(client)
     _approve(client, 1, may_modify_audio="true", may_subtitle="true")
     client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=toolong01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -819,27 +904,26 @@ def test_doan_qua_dai_thi_bao_loi_ngay_tren_trang_review(client):
         uow.commit()
 
     resp = client.post(
-        "/web/items/1/clips",
+        "/items/1/clips",
         data={"start_sec": [0], "end_sec": [372], "actor": "quan.nguyen"},
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"].startswith("/web/review/1?error=")
+    assert resp.headers["location"] == "/review/1?created=1"
 
-    page = client.get(resp.headers["location"]).text
-    assert 'class="toast error"' in page
-    assert "ngoài biên cho phép" in page
-    assert "10–180 giây" in page  # form nói trước luật, không để người dùng đoán
+    page = client.get("/review/1").text
+    assert "Khuyến cáo <strong>45–75 giây</strong>" in page
+    assert "dài tùy ý" in page
 
     with uow:
         leftovers = uow.session.execute(
             text("SELECT count(*) FROM items WHERE parent_item_id=1")
         ).scalar_one()
-    assert leftovers == 0
+    assert leftovers == 1
 
 
 def test_item_khong_ton_tai_thi_404(client):
-    assert client.get("/web/review/99999").status_code == 404
+    assert client.get("/review/99999").status_code == 404
 
 
 # ---------------- Không phục vụ file ngoài output ----------------
@@ -866,12 +950,12 @@ def test_studio_tao_video_tu_de_bai_nguoi_dung_nhap(client, monkeypatch):
             "W", (), {"write_from_prompt": lambda self, **kw: "Cpk nói gì, và không nói gì."}
         )(),
     )
-    empty = client.get("/web/studio")
+    empty = client.get("/studio")
     assert empty.status_code == 200
     assert "Chưa có video nào" in empty.text
 
     resp = client.post(
-        "/web/studio",
+        "/studio",
         data={
             "brief": "Giải thích Cpk cho quản lý nhà máy.",
             "title": "Cpk trong 60 giây",
@@ -900,7 +984,7 @@ def test_studio_tao_video_tu_de_bai_nguoi_dung_nhap(client, monkeypatch):
     assert task == "synthesize"  # bỏ qua tải/nhận dạng/chọn đoạn
     assert (source.status, source.license_type) == ("approved", "own")
 
-    page = client.get("/web/studio").text
+    page = client.get("/studio").text
     assert "Cpk trong 60 giây" in page
     assert "Thẻ thương hiệu" in page  # chưa đưa hình thì không bịa ảnh
 
@@ -915,12 +999,12 @@ def test_studio_them_canh_bieu_do_tu_so_lieu_nhap_tay(client, monkeypatch):
         )(),
     )
     client.post(
-        "/web/studio",
+        "/studio",
         data={"brief": "MES là gì", "title": "MES", "target_sec": "45", "actor": "q"},
         follow_redirects=False,
     )
     resp = client.post(
-        "/web/studio/1/shots",
+        "/studio/1/shots",
         data={
             "kind": "chart",
             "seconds": "6",
@@ -932,13 +1016,13 @@ def test_studio_them_canh_bieu_do_tu_so_lieu_nhap_tay(client, monkeypatch):
     )
     assert resp.status_code == 303
 
-    page = client.get("/web/studio").text
+    page = client.get("/studio").text
     assert "Biểu đồ số liệu" in page
     assert "T1=1.1" in page.replace(" ", "")
 
     # Số liệu sai định dạng thì nói rõ, không nuốt
     bad = client.post(
-        "/web/studio/1/shots",
+        "/studio/1/shots",
         data={"kind": "chart", "seconds": "6", "chart_data": "T1 1.10", "actor": "q"},
         follow_redirects=False,
     )
@@ -963,7 +1047,7 @@ def test_chon_giong_khi_tao_clip_va_o_studio(client, monkeypatch):
         may_commercial_use="true",
     )
     client.post(
-        "/web/items",
+        "/items",
         data={"url": "https://www.youtube.com/watch?v=voice01", "actor": "quan.nguyen"},
         follow_redirects=False,
     )
@@ -988,14 +1072,26 @@ def test_chon_giong_khi_tao_clip_va_o_studio(client, monkeypatch):
         segments=[{"start": 0, "end": 150, "text": "Kiểm thử giọng."}],
     )
 
-    page = client.get("/web/review/1").text
+    preview = get_config().media_root / "work" / "voice-previews" / "vieneu-minh-duc.wav"
+    preview.parent.mkdir(parents=True, exist_ok=True)
+    original_preview = preview.read_bytes() if preview.is_file() else None
+    preview.write_bytes(b"RIFF-preview")
+    page = client.get("/review/1").text
     assert 'name="voice_id"' in page
+    assert "▶ Nghe thử" in page
+    assert 'data-preview-url="/voices/vieneu/minh-duc/preview"' in page
+    heard = client.get("/voices/vieneu/minh-duc/preview")
+    assert heard.status_code == 200 and heard.content == b"RIFF-preview"
+    if original_preview is None:
+        preview.unlink()
+    else:
+        preview.write_bytes(original_preview)
     assert "VoxCPM2 — giọng mẫu mặc định" in page
     assert "FPT.AI — Ban Mai" in page  # hiện cả giọng chưa cấu hình, kèm lý do
     assert "Cần FPTAI_API_KEY" in page or "chưa dùng được" in page
 
     client.post(
-        "/web/items/1/clips",
+        "/items/1/clips",
         data={
             "start_sec": [10],
             "end_sec": [70],
@@ -1009,7 +1105,7 @@ def test_chon_giong_khi_tao_clip_va_o_studio(client, monkeypatch):
             text("SELECT voice_id FROM items WHERE parent_item_id=1")
         ).scalar_one()
     assert voice == "edge:vi-VN-NamMinhNeural"
-    assert "Nam Minh" in client.get("/web/review/1").text
+    assert "Nam Minh" in client.get("/review/1").text
 
     # Studio: cùng danh mục, cùng cách lưu.
     from src.interfaces.web import routes
@@ -1020,10 +1116,10 @@ def test_chon_giong_khi_tao_clip_va_o_studio(client, monkeypatch):
             "W", (), {"write_from_prompt": lambda self, **kw: "Kịch bản thử."}
         )(),
     )
-    studio_page = client.get("/web/studio").text
+    studio_page = client.get("/studio").text
     assert 'name="voice_id"' in studio_page
     client.post(
-        "/web/studio",
+        "/studio",
         data={
             "brief": "Giải thích Cpk",
             "title": "Cpk",
@@ -1038,4 +1134,4 @@ def test_chon_giong_khi_tao_clip_va_o_studio(client, monkeypatch):
             text("SELECT voice_id FROM items WHERE parent_item_id IS NULL ORDER BY id DESC LIMIT 1")
         ).scalar_one()
     assert studio_voice == "edge:vi-VN-HoaiMyNeural"
-    assert "Hoài My" in client.get("/web/studio").text
+    assert "Hoài My" in client.get("/studio").text

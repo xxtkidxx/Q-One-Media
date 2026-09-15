@@ -42,7 +42,7 @@ make dev-logs                     # tail 50, since 5m
 make dev-down
 ```
 
-Mở trình duyệt vào **http://localhost:8008/web** — bảng điều khiển, khai báo/duyệt nguồn,
+Mở trình duyệt vào **http://localhost:8008/** — bảng điều khiển, khai báo/duyệt nguồn,
 soát transcript, duyệt video. API docs ở `/docs`.
 
 Production tách hoàn toàn — dữ liệu riêng, port riêng, chạy song song được với dev:

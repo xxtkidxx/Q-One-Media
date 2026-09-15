@@ -235,6 +235,8 @@ def mix_voice_over_background(
     background_db: float = BACKGROUND_DB,
     voice_db: float = 0.0,
     duck: bool = True,
+    target_sec: float | None = None,
+    background_start_sec: float = 0.0,
 ) -> Path:
     """Lồng giọng Việt lên nền tiếng máy, có sidechain ducking.
 
@@ -242,8 +244,8 @@ def mix_voice_over_background(
     tiếng bíp HMI. Giữ lại vì âm thanh đó *mang thông tin* và làm video đáng tin với
     khán giả kỹ thuật; xoá sạch thì video nghe như slideshow (F2.4).
 
-    Độ dài đầu ra theo ``voice`` — đúng thứ cần, vì giọng Việt là trục thời gian của
-    video thành phẩm.
+    Khi có ``target_sec``, đầu ra giữ đúng độ dài đoạn hình đã chọn; giọng ngắn hơn
+    được pad im lặng, còn nền được cắt đúng mốc tương ứng của video nguồn.
 
     Graph ở đây viết lại từ ``skills/shared/scripts/audio_mix.py`` của **Easel**
     (Apache-2.0 — xem ``THIRD_PARTY_NOTICES.md``), **có sửa một lỗi**: bản gốc thiếu
@@ -259,14 +261,20 @@ def mix_voice_over_background(
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     voice_len = probe(voice).duration_sec
-    fade = min(_FADE_MAX_SEC, voice_len / 4) if voice_len > 0 else 0.0
+    output_len = target_sec if target_sec is not None else voice_len
+    fade = min(_FADE_MAX_SEC, output_len / 4) if output_len > 0 else 0.0
 
     # Giọng: chốt format NGAY, vì nhánh này vừa đi ra bản trộn vừa làm tín hiệu
     # điều khiển sidechain — hai nhánh phải cùng định dạng.
-    graph = [
-        f"[0:a]volume={voice_db}dB,aresample=44100,{_AFORMAT}[voice]",
-        f"[1:a]volume={background_db}dB,aresample=44100,{_AFORMAT}[bg0]",
-    ]
+    voice_filters = f"volume={voice_db}dB,aresample=44100,{_AFORMAT}"
+    background_filters = f"volume={background_db}dB,aresample=44100,{_AFORMAT}"
+    if target_sec is not None:
+        voice_filters += f",apad=whole_dur={target_sec:.3f},atrim=duration={target_sec:.3f}"
+        background_filters = (
+            f"atrim=start={background_start_sec:.3f}:duration={target_sec:.3f},"
+            f"asetpts=PTS-STARTPTS,{background_filters}"
+        )
+    graph = [f"[0:a]{voice_filters}[voice]", f"[1:a]{background_filters}[bg0]"]
     if duck:
         graph += [
             "[voice]asplit=2[voice_out][voice_sc]",
@@ -287,7 +295,7 @@ def mix_voice_over_background(
     )
     if fade > 0:
         graph.append(
-            f"[mixed]afade=t=out:st={max(0.0, voice_len - fade):.3f}:d={fade:.3f}[out]"
+            f"[mixed]afade=t=out:st={max(0.0, output_len - fade):.3f}:d={fade:.3f}[out]"
         )
     else:
         graph.append("[mixed]anull[out]")
@@ -295,6 +303,7 @@ def mix_voice_over_background(
     log.info(
         "ffmpeg.mix",
         voice_sec=round(voice_len, 2),
+        target_sec=round(output_len, 2),
         background_db=background_db,
         duck=duck,
     )
@@ -308,6 +317,17 @@ def mix_voice_over_background(
             str(dest),
         ]
     )
+    return dest
+
+
+def pad_audio(audio: Path, dest: Path, *, target_sec: float) -> Path:
+    """Nối im lặng để audio trần dài đúng bằng đoạn hình đã chọn."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    run([
+        "-i", str(audio), "-af",
+        f"apad=whole_dur={target_sec:.3f},atrim=duration={target_sec:.3f}",
+        "-c:a", "pcm_s16le", str(dest),
+    ])
     return dest
 
 

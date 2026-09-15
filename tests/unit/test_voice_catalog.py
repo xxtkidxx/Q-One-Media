@@ -99,6 +99,18 @@ def test_mau_thieu_loi_doc_thi_noi_ro_clone_kem_sat_hon(tmp_path):
     assert "Thiếu file .txt" in voice.note
 
 
+def test_voxcpm_dung_toan_bo_mau_vieneu_da_cache(tmp_path):
+    preview_dir = tmp_path / "work" / "voice-previews"
+    preview_dir.mkdir(parents=True)
+    (preview_dir / "vieneu-pham-tuyen.wav").write_bytes(b"RIFF-preview")
+
+    voice = find_voice("voxcpm:vieneu-pham-tuyen", _settings(tmp_path))
+    assert voice is not None
+    assert voice.label == "VoxCPM2 clone — Phạm Tuyên"
+    assert voice.gender == "nam" and voice.region == "Bắc"
+    assert voice.ref_text == "Xin chào, đây là giọng đọc thử cho video của Q One Media."
+
+
 @pytest.mark.parametrize(
     "engine,expected",
     [
@@ -165,21 +177,29 @@ def test_vieneu_gop_du_20_giong_va_du_ba_mien(tmp_path):
     assert all(v.id.startswith("vieneu:") for v in voices)
 
 
-def test_chua_cai_goi_vieneu_thi_giong_hien_kem_ly_do(tmp_path, monkeypatch):
-    import src.infrastructure.tts.catalog as catalog_mod
-
-    monkeypatch.setattr(catalog_mod, "find_spec", lambda name: None)
+def test_catalog_api_khong_khoa_giong_duoc_cai_o_worker(tmp_path):
+    """API chỉ lập catalog; package/model nặng thuộc image worker riêng."""
     voices = [v for v in list_voices(_settings(tmp_path)) if v.engine == "vieneu"]
-    assert voices and all(not v.available for v in voices)
-    assert all("vieneu" in v.note for v in voices)
+    assert voices and all(v.available for v in voices)
+
+
+def test_vox_va_edge_co_duong_dan_nghe_thu(tmp_path):
+    voices = list_voices(_settings(tmp_path))
+
+    vox = next(v for v in voices if v.id == "voxcpm:default")
+    assert vox.preview_path == tmp_path / "work/voice-previews/voxcpm-default.wav"
+
+    edge = [v for v in voices if v.engine == "edge"]
+    assert [v.preview_path for v in edge] == [
+        tmp_path / "work/voice-previews" / f"edge-{voice[0]}.mp3"
+        for voice in EDGE_VOICES
+    ]
 
 
 def test_chon_giong_vieneu_thi_dung_dung_ten_trong_api(tmp_path, monkeypatch):
     """Id dùng slug ASCII, còn API của thư viện nhận tên có dấu — map phải đúng."""
-    import src.infrastructure.tts.catalog as catalog_mod
     import src.infrastructure.tts.vieneu as vieneu_mod
 
-    monkeypatch.setattr(catalog_mod, "find_spec", lambda name: object())
     seen: list[str] = []
 
     class FakeVieNeu:

@@ -13,10 +13,6 @@ from src.domain.errors import InvariantViolation
 RECOMMENDED_SEGMENT_MIN_SEC = 45.0
 RECOMMENDED_SEGMENT_MAX_SEC = 75.0
 
-# Biên cứng: ngoài khoảng này thì không còn là short video.
-HARD_SEGMENT_MIN_SEC = 10.0
-HARD_SEGMENT_MAX_SEC = 180.0
-
 # Ngưỡng cho phép audio TTS dài hơn khung thời gian (đặc tả F2.3).
 # Quá ngưỡng thì viết kịch bản ngắn lại — KHÔNG tăng tốc độ đọc để nhồi cho vừa.
 SYLLABLE_OVERRUN_TOLERANCE = 0.05
@@ -64,12 +60,6 @@ class Segment:
             raise InvariantViolation(
                 f"end_sec ({self.end_sec}) phải lớn hơn start_sec ({self.start_sec})"
             )
-        if not (HARD_SEGMENT_MIN_SEC <= self.duration_sec <= HARD_SEGMENT_MAX_SEC):
-            raise InvariantViolation(
-                f"đoạn dài {self.duration_sec:.1f}s, ngoài biên cho phép "
-                f"{HARD_SEGMENT_MIN_SEC}–{HARD_SEGMENT_MAX_SEC}s"
-            )
-
     @property
     def duration_sec(self) -> float:
         return self.end_sec - self.start_sec

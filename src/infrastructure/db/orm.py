@@ -233,6 +233,21 @@ class AuditLogRow(Base):
     __table_args__ = (Index("audit_entity_idx", "entity", "entity_id"),)
 
 
+class UserAccountRow(Base):
+    __tablename__ = "user_accounts"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    display_name: Mapped[str] = mapped_column(String(160))
+    password_hash: Mapped[str] = mapped_column(Text)
+    role: Mapped[str] = mapped_column(String(20))
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(_TS, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        _TS, server_default=func.now(), onupdate=func.now()
+    )
+
+
 # Dùng cho test tích hợp trên SQLite: ở đó không có ENUM gốc nên phải map sang
 # VARCHAR. Chỉ ảnh hưởng test, không ảnh hưởng production.
 STRING_ENUM_FALLBACK = String(64)

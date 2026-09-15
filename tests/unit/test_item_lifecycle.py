@@ -167,7 +167,7 @@ def test_doan_khong_duoc_vuot_do_dai_video():
 
 @pytest.mark.parametrize(
     "start,end",
-    [(10.0, 10.0), (50.0, 40.0), (-1.0, 50.0), (0.0, 5.0), (0.0, 300.0)],
+    [(10.0, 10.0), (50.0, 40.0), (-1.0, 50.0)],
 )
 def test_doan_khong_hop_le_bi_tu_choi(start, end):
     with pytest.raises(InvariantViolation):
@@ -178,6 +178,8 @@ def test_cua_so_45_75s_la_khuyen_nghi_khong_phai_bien_cung():
     assert Segment(0.0, 60.0).is_recommended_length is True
     ngan = Segment(0.0, 20.0)
     assert ngan.is_recommended_length is False  # vẫn dựng được, chỉ là ngoài khuyến nghị
+    assert Segment(0.0, 5.0).is_recommended_length is False
+    assert Segment(0.0, 300.0).is_recommended_length is False
 
 
 # ---------------- Reframe có điều kiện ----------------

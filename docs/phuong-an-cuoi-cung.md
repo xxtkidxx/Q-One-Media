@@ -78,7 +78,7 @@ Tổng hợp toàn bộ khảo sát. **Mọi thành phần đều Apache-2.0, MI
 | Tải video đa nền tảng | **yt-dlp** qua VideoLingo `_1_ytdlp.py` | 190.797 | Unlicense | 1.510+ site |
 | Tách giọng khỏi tiếng máy | **Demucs** qua VideoLingo `demucs_vl.py` | 3.203 | MIT | Giữ tiếng máy — quan trọng với video công nghiệp |
 | ASR + forced alignment | **WhisperX** qua VideoLingo `_2_asr.py` | 24.017 | BSD-2 | Timestamp cấp từ ±50ms |
-| Chọn đoạn | **Claude Sonnet 5** + prompt riêng | — | — | Tiêu chí kỹ thuật, không phải "điểm cười" |
+| Chọn đoạn | **Gemini / OpenAI / Claude** + prompt riêng | — | — | Cùng JSON Schema; Gemini free tier mặc định |
 | Ngắt câu + tóm tắt + dịch/viết | **VideoLingo `_3_*` `_4_*`** | 18.433 | Apache-2.0 | Có bước tóm tắt toàn video trước khi dịch |
 | Phụ đề + burn | **VideoLingo `_5_*` `_6_*` `_7_*`** | 18.433 | Apache-2.0 | |
 | **TTS / lồng tiếng** | **VoxCPM2** cắm qua `custom_tts.py` | 37.028 | **Apache-2.0** | Có tiếng Việt, có clone + voice design, on-prem |
@@ -132,7 +132,7 @@ Tổng hợp toàn bộ khảo sát. **Mọi thành phần đều Apache-2.0, MI
 ⑦ CHỌN ĐOẠN ─ LLM đề xuất 2–3 cửa sổ 45–75s + lý do → người chọn
        │        tiêu chí: có số liệu kiểm chứng được, giải thích nguyên nhân,
        │        có thiết bị/màn hình thật; TRÁNH talking-head
-       ▼       [Claude Sonnet 5, prompt riêng]
+       ▼       [Gemini / OpenAI / Claude, prompt riêng; 45–75s chỉ là khuyến cáo]
 ⑧ VIẾT KỊCH BẢN VIỆT ─ KHÔNG dịch từng chữ. Tóm tắt ngữ cảnh → viết lại
        │                 + phân tích NMI + bối cảnh VN. Ngân sách âm tiết/cảnh.
        ▼                [VideoLingo _3_* _4_* + glossary EN↔VI và ZH↔VI]
@@ -183,7 +183,7 @@ Cộng việc tích hợp và test: **~2–3 tuần dev**.
 **Đầu ra:** short video tiếng Việt, hình dựng từ tài sản của NMI, không dùng thước phim của ai.
 
 ```
-① ĐỀ BÀI ─ người dùng nhập tại /web/studio: nội dung, thời lượng, người tạo
+① ĐỀ BÀI ─ người dùng nhập tại /studio: nội dung, thời lượng, người tạo
        ▼
 ② VIẾT KỊCH BẢN ─ LLM viết tiếng Việt trong ngân sách âm tiết + glossary
        │           [DÙNG LẠI prompt/ngân sách của GĐ1]

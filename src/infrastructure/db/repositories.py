@@ -114,6 +114,14 @@ class SqlItemRepository:
         ).all()
         return {ItemStage(stage): count for stage, count in rows}
 
+    def list_children(self, parent_item_id: int) -> list[Item]:
+        rows = self._s.scalars(
+            select(ItemRow)
+            .where(ItemRow.parent_item_id == parent_item_id)
+            .order_by(ItemRow.clip_index)
+        ).all()
+        return [mappers.item_to_domain(row) for row in rows]
+
     def update(self, item: Item) -> None:
         assert item.id is not None
         row = self._s.get(ItemRow, item.id)

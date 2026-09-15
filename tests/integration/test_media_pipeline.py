@@ -195,8 +195,8 @@ def test_render_toan_chuoi_ra_video_doc_co_phu_de(landscape_video, tmp_path):
 
     voice = tmp_path / "voice.wav"
     bg = tmp_path / "bg.wav"
-    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=220:duration=4", str(voice)])
-    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=90:duration=4", str(bg)])
+    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=220:duration=2", str(voice)])
+    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=90:duration=6", str(bg)])
 
     out = FfmpegRenderer().render(
         RenderRequest(
@@ -219,6 +219,7 @@ def test_render_toan_chuoi_ra_video_doc_co_phu_de(landscape_video, tmp_path):
     info = ffmpeg.probe(out)
     assert info.aspect == pytest.approx(9 / 16, abs=0.01)
     assert info.has_audio and info.has_video
+    assert info.duration_sec == pytest.approx(4.0, abs=0.4)
     assert out.stat().st_size > 0
 
 

@@ -322,4 +322,5 @@ def test_nguoi_duyet_tra_ve_viet_lai(uow, clock):
         item.id, actor="q", reason="kịch bản dịch sát nguyên văn quá", uow=uow, clock=clock
     )
     assert uow.items.get(item.id).stage is ItemStage.SEGMENT_PICKED
+    assert uow.jobs.all()[-1].task is JobTask.WRITE_SCRIPT
     assert "sent_back_for_rewrite" in uow.audit.actions()

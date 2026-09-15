@@ -6,11 +6,10 @@ thái. Không có quy tắc nghiệp vụ nào ở đây — quy tắc nằm tro
 
 from __future__ import annotations
 
-import base64
-import hmac
+from pathlib import Path
 
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from src.domain.errors import (
@@ -22,6 +21,8 @@ from src.domain.errors import (
 )
 from src.interfaces.api.routers import health, items, sources
 from src.interfaces.web import routes as web_routes
+from src.interfaces.web.auth import install_auth, seed_accounts
+from src.interfaces.web.auth import router as auth_router
 from src.shared.config import Settings, get_settings
 from src.shared.logging import configure_logging, get_logger
 
@@ -41,46 +42,27 @@ def create_app() -> FastAPI:
         ),
         docs_url="/docs",
     )
+    app.state.settings = settings
     app.include_router(health.router)
-    app.include_router(sources.router)
-    app.include_router(items.router)
+    app.include_router(sources.router, prefix="/api")
+    app.include_router(items.router, prefix="/api")
+    app.include_router(auth_router)
     app.include_router(web_routes.router)
-    _install_basic_auth(app, settings)
+
+    @app.get("/web", include_in_schema=False)
+    @app.get("/web/{path:path}", include_in_schema=False)
+    def _legacy_web_redirect(request: Request, path: str = "") -> RedirectResponse:
+        target = "/" + path
+        if request.url.query:
+            target += "?" + request.url.query
+        return RedirectResponse(target, status_code=308)
     _mount_media(app, settings)
+    static = Path(web_routes.__file__).parent / "static"
+    app.mount("/static", StaticFiles(directory=str(static)), name="static")
     _install_error_handlers(app)
+    install_auth(app, settings)
+    seed_accounts(settings)
     return app
-
-
-def _install_basic_auth(app: FastAPI, settings: Settings) -> None:
-    """Basic auth cho mặt tiền web và file media.
-
-    ``/healthz`` và ``/readyz`` **luôn mở**: nếu health check phải mang credential
-    thì một lần đổi mật khẩu là container bị coi là chết và restart vô hạn.
-    """
-    if not settings.web.enabled:
-        log.warning(
-            "web.auth.disabled",
-            reason="chưa đặt WEB_USER/WEB_PASSWORD — chỉ chấp nhận được ở dev",
-        )
-        return
-
-    expected = "Basic " + base64.b64encode(
-        f"{settings.web.user}:{settings.web.password}".encode()
-    ).decode()
-
-    @app.middleware("http")
-    async def _auth(request: Request, call_next):
-        if request.url.path in ("/healthz", "/readyz"):
-            return await call_next(request)
-        header = request.headers.get("authorization", "")
-        # compare_digest: so sánh chuỗi bằng `==` để lộ thời gian theo số ký tự khớp
-        if not hmac.compare_digest(header, expected):
-            return Response(
-                status_code=401,
-                content="Cần đăng nhập.",
-                headers={"WWW-Authenticate": 'Basic realm="Q One Media"'},
-            )
-        return await call_next(request)
 
 
 def _mount_media(app: FastAPI, settings: Settings) -> None:
