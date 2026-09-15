@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from src.domain.authoring.series import Series
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import ItemStage
 from src.domain.publishing.entities import Publication
@@ -139,9 +140,32 @@ class FakeItemRepository:
             key=lambda item: item.clip_index,
         )
 
+    def list_by_series(self, series_id: int) -> list[Item]:
+        return sorted(
+            (item for item in self._rows.values() if item.series_id == series_id),
+            key=lambda item: item.id or 0,
+        )
+
     def update(self, item: Item) -> None:
         assert item.id is not None
         self._rows[item.id] = item
+
+
+class FakeSeriesRepository:
+    def __init__(self, seq: _Seq) -> None:
+        self._seq = seq
+        self._rows: dict[int, Series] = {}
+
+    def add(self, series: Series) -> Series:
+        series.id = self._seq.next()
+        self._rows[series.id] = series
+        return series
+
+    def get(self, series_id: int) -> Series | None:
+        return self._rows.get(series_id)
+
+    def list_all(self) -> list[Series]:
+        return sorted(self._rows.values(), key=lambda series: -(series.id or 0))
 
 
 class FakePublicationRepository:
@@ -231,6 +255,7 @@ class FakeUnitOfWork:
         self.items = FakeItemRepository(seq)
         self.publications = FakePublicationRepository(seq)
         self.jobs = FakeJobRepository(seq)
+        self.series = FakeSeriesRepository(seq)
         self.audit = FakeAuditLog()
         self.commits = 0
         self.rollbacks = 0

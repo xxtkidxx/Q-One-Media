@@ -87,6 +87,8 @@ class Item:
     include_attribution: bool = True
     # Giọng đọc người dùng chọn cho video này; None = theo TTS_ENGINE mặc định.
     voice_id: str | None = None
+    # Series Studio mà video này kế thừa ràng buộc; None = video lẻ.
+    series_id: int | None = None
 
     review_by: str | None = None
     review_at: datetime | None = None
@@ -131,6 +133,7 @@ class Item:
         author: str,
         voice_id: str | None = None,
         output_aspect_ratio: AspectRatio | None = PORTRAIT_9_16,
+        series_id: int | None = None,
     ) -> Item:
         """Giai đoạn 2, đường thủ công: **người dùng tự nhập yêu cầu nội dung**.
 
@@ -160,6 +163,7 @@ class Item:
             output_aspect_ratio=output_aspect_ratio,
             include_attribution=False,
             voice_id=voice_id,
+            series_id=series_id,
             _dubbing_cleared=True,
         )
 

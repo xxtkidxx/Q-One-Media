@@ -1,0 +1,71 @@
+{% extends "base.html" %}{% block body %}
+{% if series is none %}
+<div class="page-head"><div><p class="sub"><a href="/studio">Studio</a> / Series mới</p><h1>Tạo Series</h1><p class="sub">Một khuôn sản xuất cho loạt video ngắn cùng chuyên đề. Video sinh từ Series kế thừa mọi ràng buộc dưới đây.</p></div><a class="btn ghost" href="/studio">← Studio</a></div>
+<section class="card">
+  <form method="post" action="/studio/series">
+    <div class="row">
+      <div><label>Tên Series</label><input name="name" placeholder="Ví dụ: SPC không nói dối"></div>
+      <div><label>Pillar</label><input name="pillar" placeholder="Ví dụ: Giải-Thích"></div>
+    </div>
+    <div class="row">
+      <div><label>Độ dài mục tiêu (giây, {{ '%g'|format(min_sec) }}–{{ '%g'|format(max_sec) }})</label><input type="number" name="target_sec" value="35" min="{{ min_sec }}" max="{{ max_sec }}" step="1"></div>
+      <div><label>Khung đầu ra</label><select name="output_ratio"><option value="9:16">Dọc · 9:16</option></select></div>
+    </div>
+    <label>Mẫu hook · mỗi dòng một mẫu, chỗ trống viết trong [ ]</label>
+    <textarea name="hooks" rows="6" placeholder="[Biểu đồ/chỉ số] báo [trạng thái], mà [thực tế ngược lại]. Ai sai?&#10;[A] và [B] khác nhau đúng một chỗ: [chỗ khác]."></textarea>
+    <label>Thuật ngữ giữ nguyên tiếng Anh · cách nhau bằng dấu phẩy hoặc xuống dòng</label>
+    <textarea name="kept_terms" rows="3" placeholder="MES, SPC, OEE, Cpk, Ppk, Gage R&amp;R"></textarea>
+    <label>Giọng đọc</label>
+    <select name="voice_id">{% for voice in voices %}<option value="{{ voice.id }}" {% if voice.id == default_voice %}selected{% endif %} {% if not voice.available %}disabled{% endif %}>{{ voice.label }}{% if voice.gender %} · {{ voice.gender }}{% endif %}{% if voice.region %} · giọng {{ voice.region }}{% endif %}</option>{% endfor %}</select>
+    <div class="row">
+      <div><label>Cỡ chữ phụ đề</label><input type="number" name="subtitle_font_size" value="{{ default_font_size }}" min="32" max="96"></div>
+      <div><label>Ký tự tối đa mỗi dòng</label><input type="number" name="subtitle_max_chars" value="{{ default_max_chars }}" min="16" max="48"></div>
+    </div>
+    <p class="sub">Preset phụ đề hiện chỉ được lưu và hiển thị; bản dựng vẫn dùng thông số mặc định.</p>
+    <label>Lịch đăng (không bắt buộc)</label>
+    <p>{% for day in weekday_labels %}<label style="display:inline-flex;gap:4px;margin-right:12px"><input type="checkbox" name="weekday" value="{{ loop.index0 }}"> {{ day }}</label>{% endfor %}</p>
+    <div class="row"><div><label>Giờ đăng</label><input type="time" name="post_time"></div><div></div></div>
+    <p class="note legal">Lịch đăng là kế hoạch để theo dõi. Hệ thống không tự đăng: mọi video vẫn qua duyệt và đăng tay.</p>
+    <p class="sub">Người tạo: <strong>{{ request.state.user.display_name }}</strong> · lấy từ tài khoản đăng nhập.</p>
+    <div class="actions"><button>Tạo Series</button><a class="btn ghost" href="/studio">Hủy</a></div>
+  </form>
+</section>
+{% else %}
+<div class="page-head"><div><p class="sub"><a href="/studio">Studio</a> / Series #{{ series.id }}</p><h1>{{ series.name }}</h1><p class="sub">Pillar: {{ series.pillar }} · {{ '%g'|format(series.target_sec) }} giây · {{ series.output_aspect_ratio }} · {{ rows|length }} video con</p></div><a class="btn ghost" href="/studio">← Studio</a></div>
+<div class="toast-stack">{% if request.query_params.get('created') %}<div class="toast success">Đã tạo Series. Nhập đề tài để sinh bản nháp kịch bản.</div>{% endif %}{% if request.query_params.get('drafted') %}<div class="toast success">Đã tạo {{ request.query_params.get('drafted') }} bản nháp. Đọc kịch bản rồi đưa vào sản xuất.</div>{% endif %}{% if request.query_params.get('started') %}<div class="toast success">Đã xếp video #{{ request.query_params.get('started') }} vào hàng lồng tiếng.</div>{% endif %}</div>
+
+<div class="two-col">
+  <section class="card"><h2 style="margin-top:0">Cấu hình</h2>
+    <div class="scroll"><table><tbody>
+      <tr><th>Pillar</th><td>{{ series.pillar }}</td></tr>
+      <tr><th>Ngôn ngữ</th><td>Tiếng Việt ({{ series.language }})</td></tr>
+      <tr><th>Độ dài · khung</th><td>{{ '%g'|format(series.target_sec) }} giây · {{ series.output_aspect_ratio }}</td></tr>
+      <tr><th>Giọng đọc</th><td>{{ voice_label }}</td></tr>
+      <tr><th>Phụ đề</th><td>Cỡ {{ series.subtitle.font_size }} · tối đa {{ series.subtitle.max_chars_per_line }} ký tự/dòng <span class="sub">(chưa áp vào bản dựng)</span></td></tr>
+      <tr><th>Lịch đăng</th><td>{{ series.cadence.label if series.cadence else 'Chưa đặt' }}</td></tr>
+      <tr><th>Giữ nguyên tiếng Anh</th><td>{{ series.kept_terms|join(', ') if series.kept_terms else '—' }}</td></tr>
+    </tbody></table></div>
+    <h3>Mẫu hook · xoay vòng theo thứ tự video</h3>
+    <ol>{% for hook in series.hook_templates %}<li>{{ hook }}</li>{% endfor %}</ol>
+  </section>
+  <section class="card"><h2 style="margin-top:0">Sinh bản nháp kịch bản</h2>
+    <form method="post" action="/studio/series/{{ series.id }}/drafts">
+      <label>Đề tài · mỗi dòng một đề tài, tối đa {{ max_topics }} mỗi lần</label>
+      <textarea name="topics" rows="8" placeholder="Vì sao X-bar báo ngoài kiểm soát mà sản phẩm vẫn đạt spec&#10;Cpk và Ppk khác nhau ở đúng một chỗ"></textarea>
+      <p class="sub">Mỗi đề tài là một lần gọi model, chạy ngay khi bấm. Bản nháp dừng trước bước lồng tiếng để người đọc kịch bản trước.</p>
+      <div class="actions"><button>Sinh bản nháp</button></div>
+    </form>
+  </section>
+</div>
+
+<section class="card"><h2 style="margin-top:0">Video con</h2><div class="scroll"><table><thead><tr><th>Video</th><th>Hook đã dùng</th><th>Trạng thái</th><th>Kịch bản</th><th></th></tr></thead><tbody>
+{% for row in rows %}{% set item=row.item %}<tr>
+  <td><strong>#{{ item.id }} · {{ item.title_original or 'Chưa đặt tiêu đề' }}</strong><br><span class="sub">{{ item.script_sources|join(', ') }}</span></td>
+  <td>{{ row.hook or '—' }}</td>
+  <td><span class="pill {{ item.stage.value }}">{{ row.stage_label }}</span><div class="progress"><span style="width:{{ row.percent }}%"></span></div><span class="sub">{{ row.step_label }}</span></td>
+  <td><details><summary>Xem</summary><p style="white-space:pre-wrap">{{ item.script_vi or 'Chưa có kịch bản.' }}</p></details></td>
+  <td><a class="btn ghost" href="/studio/{{ item.id }}">Mở biên tập</a>{% if row.can_start %}<form method="post" action="/studio/series/{{ series.id }}/items/{{ item.id }}/start"><button>Đưa vào sản xuất</button></form>{% elif row.started and item.stage.value == 'scripted' %}<span class="sub">Đã xếp lồng tiếng</span>{% endif %}</td>
+</tr>{% else %}<tr><td colspan="5" class="empty">Chưa có video con. Nhập đề tài ở trên để sinh bản nháp.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endif %}
+{% endblock %}

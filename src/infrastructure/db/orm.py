@@ -116,6 +116,28 @@ class SourceRow(Base):
     )
 
 
+class SeriesRow(Base):
+    __tablename__ = "series"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    name: Mapped[str] = mapped_column(Text)
+    pillar: Mapped[str] = mapped_column(Text)
+    hook_templates: Mapped[Any] = mapped_column(JSONB)
+    kept_terms: Mapped[Any] = mapped_column(JSONB, default=list)
+    target_sec: Mapped[float] = mapped_column(Numeric(6, 2))
+    output_aspect_ratio: Mapped[str] = mapped_column(Text)
+    language: Mapped[str] = mapped_column(Text, default="vi")
+    voice_id: Mapped[str | None] = mapped_column(Text, default=None)
+    subtitle_font_size: Mapped[int] = mapped_column(Integer)
+    subtitle_max_chars: Mapped[int] = mapped_column(Integer)
+    cadence_weekdays: Mapped[Any | None] = mapped_column(JSONB, default=None)
+    cadence_time: Mapped[str | None] = mapped_column(Text, default=None)
+    created_at: Mapped[datetime] = mapped_column(_TS, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        _TS, server_default=func.now(), onupdate=func.now()
+    )
+
+
 class ItemRow(Base):
     __tablename__ = "items"
 
@@ -129,6 +151,9 @@ class ItemRow(Base):
     clip_index: Mapped[int] = mapped_column(Integer, default=1)
     include_attribution: Mapped[bool] = mapped_column(Boolean, default=True)
     voice_id: Mapped[str | None] = mapped_column(Text, default=None)
+    series_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("series.id", ondelete="RESTRICT"), default=None
+    )
     item_url: Mapped[str] = mapped_column(Text, unique=True)
     external_id: Mapped[str | None] = mapped_column(Text, default=None)
     title_original: Mapped[str | None] = mapped_column(Text, default=None)
@@ -162,6 +187,7 @@ class ItemRow(Base):
     __table_args__ = (
         Index("items_stage_idx", "stage"),
         Index("items_source_idx", "source_id"),
+        Index("items_series_idx", "series_id"),
     )
 
 

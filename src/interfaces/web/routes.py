@@ -32,6 +32,12 @@ from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import and_, or_, select
 
+from src.application.use_cases.author_series import (
+    MAX_TOPICS_PER_BATCH,
+    create_series,
+    draft_from_series,
+    start_series_video,
+)
 from src.application.use_cases.author_video import (
     STUDIO_SOURCE_URL,
     add_shot,
@@ -67,6 +73,15 @@ from src.application.use_cases.write_script import (
     edit_transcript,
     load_glossary,
     load_transcript,
+)
+from src.domain.authoring.series import (
+    DEFAULT_SUBTITLE_FONT_SIZE,
+    DEFAULT_SUBTITLE_MAX_CHARS,
+    MAX_SERIES_SEC,
+    MIN_SERIES_SEC,
+    WEEKDAY_LABELS,
+    PostingCadence,
+    SubtitlePreset,
 )
 from src.domain.authoring.visuals import Shot, ShotKind
 from src.domain.errors import DomainError
@@ -373,6 +388,10 @@ def studio_page(request: Request, uow: Uow, config: Config):
             if studio
             else []
         )
+        series_rows = [
+            {"series": series, "children": len(uow.items.list_by_series(series.id or 0))}
+            for series in uow.series.list_all()
+        ]
     rows = []
     for item in items:
         plan = load_visual_plan(config.media_root, item.id or 0)
@@ -392,6 +411,7 @@ def studio_page(request: Request, uow: Uow, config: Config):
         "studio.html",
         title="Studio",
         rows=rows,
+        series_rows=series_rows,
         seg_best_min=RECOMMENDED_SEGMENT_MIN_SEC,
         seg_best_max=RECOMMENDED_SEGMENT_MAX_SEC,
         image_provider=config.visuals.provider if config.visuals.enabled else None,
@@ -403,6 +423,165 @@ def studio_page(request: Request, uow: Uow, config: Config):
         },
         default_voice=default_voice_id(config),
     )
+
+
+@router.get("/studio/series/new", response_class=HTMLResponse)
+def studio_series_new(request: Request, config: Config):
+    return _render(
+        request,
+        "studio_series.html",
+        title="Series mới",
+        series=None,
+        voices=list_voices(config),
+        default_voice=default_voice_id(config),
+        weekday_labels=WEEKDAY_LABELS,
+        min_sec=MIN_SERIES_SEC,
+        max_sec=MAX_SERIES_SEC,
+        default_font_size=DEFAULT_SUBTITLE_FONT_SIZE,
+        default_max_chars=DEFAULT_SUBTITLE_MAX_CHARS,
+    )
+
+
+@router.post("/studio/series", response_class=HTMLResponse)
+def studio_series_create(
+    request: Request,
+    uow: Uow,
+    name: Annotated[str, Form()] = "",
+    pillar: Annotated[str, Form()] = "",
+    hooks: Annotated[str, Form()] = "",
+    target_sec: Annotated[float, Form()] = 35.0,
+    kept_terms: Annotated[str, Form()] = "",
+    output_ratio: Annotated[str, Form()] = "9:16",
+    voice_id: Annotated[str, Form()] = "",
+    subtitle_font_size: Annotated[int, Form()] = DEFAULT_SUBTITLE_FONT_SIZE,
+    subtitle_max_chars: Annotated[int, Form()] = DEFAULT_SUBTITLE_MAX_CHARS,
+    weekday: Annotated[list[int] | None, Form()] = None,
+    post_time: Annotated[str, Form()] = "",
+):
+    """Mọi kiểm tra cấu hình nằm trong ``Series``; route chỉ tách chuỗi form."""
+    try:
+        cadence = (
+            PostingCadence(weekdays=tuple(weekday or ()), time_of_day=post_time.strip())
+            if weekday or post_time.strip()
+            else None
+        )
+        series = create_series(
+            name=name,
+            pillar=pillar,
+            hook_templates=hooks.splitlines(),
+            target_sec=target_sec,
+            kept_terms=kept_terms.replace("\n", ",").split(","),
+            output_aspect_ratio=AspectRatio.parse(output_ratio),
+            voice_id=voice_id or None,
+            subtitle=SubtitlePreset(
+                font_size=subtitle_font_size, max_chars_per_line=subtitle_max_chars
+            ),
+            cadence=cadence,
+            uow=uow,
+            actor=_actor(request),
+        )
+    except DomainError as exc:
+        return _error_page(request, "Không tạo được Series", str(exc))
+    return RedirectResponse(url=f"/studio/series/{series.id}?created=1", status_code=303)
+
+
+@router.get("/studio/series/{series_id}", response_class=HTMLResponse)
+def studio_series_detail(request: Request, series_id: int, uow: Uow, config: Config):
+    with uow:
+        series = uow.series.get(series_id)
+        if series is None:
+            raise HTTPException(status_code=404, detail=f"không có series #{series_id}")
+        children = uow.items.list_by_series(series_id)
+        child_ids = [item.id for item in children if item.id is not None]
+        events = (
+            list(
+                uow.session.scalars(
+                    select(AuditLogRow).where(
+                        AuditLogRow.entity == "item",
+                        AuditLogRow.entity_id.in_(child_ids),
+                        AuditLogRow.action.in_(
+                            ("series_draft_created", "series_production_started")
+                        ),
+                    )
+                )
+            )
+            if child_ids
+            else []
+        )
+    hooks = {
+        event.entity_id: (event.detail or {}).get("hook")
+        for event in events
+        if event.action == "series_draft_created"
+    }
+    started = {event.entity_id for event in events if event.action == "series_production_started"}
+    rows = []
+    for item in children:
+        _, _, percent, step_label = _progress_detail(item.stage)
+        rows.append({
+            "item": item,
+            "hook": hooks.get(item.id),
+            "stage_label": _stage_label(item.stage),
+            "percent": percent,
+            "step_label": step_label,
+            "started": item.id in started,
+            "can_start": item.stage is ItemStage.SCRIPTED and item.id not in started,
+        })
+    return _render(
+        request,
+        "studio_series.html",
+        title=series.name,
+        series=series,
+        rows=rows,
+        voice_label=label_for(series.voice_id, config),
+        max_topics=MAX_TOPICS_PER_BATCH,
+    )
+
+
+@router.post("/studio/series/{series_id}/drafts", response_class=HTMLResponse)
+def studio_series_drafts(
+    request: Request,
+    series_id: int,
+    uow: Uow,
+    clock: Clock,
+    config: Config,
+    topics: Annotated[str, Form()] = "",
+):
+    try:
+        with uow:
+            glossary = load_glossary(uow, "en")
+        outcome = draft_from_series(
+            series_id,
+            topics=topics.splitlines(),
+            author=_actor(request),
+            writer=build_script_writer(config.llm),
+            speech_rate=config.tts.measured_rate,
+            glossary=glossary,
+            media_root=config.media_root,
+            uow=uow,
+            clock=clock,
+        )
+    except (DomainError, RuntimeError, ValueError) as exc:
+        return _error_page(request, "Không sinh được bản nháp", str(exc))
+    if outcome.failed:
+        return _error_page(
+            request,
+            f"Đã tạo {len(outcome.created)} bản nháp, {len(outcome.failed)} đề tài lỗi",
+            "; ".join(f"“{topic}”: {error}" for topic, error in outcome.failed),
+            hint=f"Các bản nháp đã tạo nằm ở /studio/series/{series_id}. "
+            "Nhập lại riêng các đề tài lỗi.",
+        )
+    return RedirectResponse(
+        url=f"/studio/series/{series_id}?drafted={len(outcome.created)}", status_code=303
+    )
+
+
+@router.post("/studio/series/{series_id}/items/{item_id}/start", response_class=HTMLResponse)
+def studio_series_start(request: Request, series_id: int, item_id: int, uow: Uow):
+    try:
+        start_series_video(item_id, series_id=series_id, uow=uow, actor=_actor(request))
+    except DomainError as exc:
+        return _error_page(request, "Không đưa được bản nháp vào sản xuất", str(exc))
+    return RedirectResponse(url=f"/studio/series/{series_id}?started={item_id}", status_code=303)
 
 
 @router.get("/studio/{item_id}", response_class=HTMLResponse)

@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Protocol
 
+from src.domain.authoring.repository import SeriesRepository
 from src.domain.production.repository import ItemRepository
 from src.domain.publishing.repository import PublicationRepository
 from src.domain.publishing.value_objects import PublishPlatform, VideoMetadata
@@ -59,6 +60,7 @@ class UnitOfWork(Protocol):
     items: ItemRepository
     publications: PublicationRepository
     jobs: JobRepository
+    series: SeriesRepository
     audit: AuditLog
 
     def __enter__(self) -> UnitOfWork: ...

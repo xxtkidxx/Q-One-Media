@@ -16,6 +16,7 @@ from src.infrastructure.db.repositories import (
     SqlItemRepository,
     SqlJobRepository,
     SqlPublicationRepository,
+    SqlSeriesRepository,
     SqlSourceRepository,
 )
 
@@ -86,6 +87,7 @@ class SqlUnitOfWork:
         self.items = SqlItemRepository(session)
         self.publications = SqlPublicationRepository(session)
         self.jobs = SqlJobRepository(session)
+        self.series = SqlSeriesRepository(session)
         self.audit = SqlAuditLog(session)
 
     def commit(self) -> None:

@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import func, select, text, update
 from sqlalchemy.orm import Session
 
+from src.domain.authoring.series import Series
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import ItemStage
 from src.domain.publishing.entities import Publication
@@ -21,6 +22,7 @@ from src.infrastructure.db.orm import (
     ItemRow,
     JobRow,
     PublicationRow,
+    SeriesRow,
     SourceRow,
 )
 
@@ -122,6 +124,12 @@ class SqlItemRepository:
         ).all()
         return [mappers.item_to_domain(row) for row in rows]
 
+    def list_by_series(self, series_id: int) -> list[Item]:
+        rows = self._s.scalars(
+            select(ItemRow).where(ItemRow.series_id == series_id).order_by(ItemRow.id)
+        ).all()
+        return [mappers.item_to_domain(row) for row in rows]
+
     def update(self, item: Item) -> None:
         assert item.id is not None
         row = self._s.get(ItemRow, item.id)
@@ -129,6 +137,26 @@ class SqlItemRepository:
             raise LookupError(f"không có item #{item.id} để cập nhật")
         mappers.item_apply(row, item)
         self._s.flush()
+
+
+class SqlSeriesRepository:
+    def __init__(self, session: Session) -> None:
+        self._s = session
+
+    def add(self, series: Series) -> Series:
+        row = mappers.series_to_row(series)
+        self._s.add(row)
+        self._s.flush()
+        series.id = row.id
+        return series
+
+    def get(self, series_id: int) -> Series | None:
+        row = self._s.get(SeriesRow, series_id)
+        return mappers.series_to_domain(row) if row else None
+
+    def list_all(self) -> list[Series]:
+        rows = self._s.scalars(select(SeriesRow).order_by(SeriesRow.id.desc())).all()
+        return [mappers.series_to_domain(row) for row in rows]
 
 
 class SqlPublicationRepository:

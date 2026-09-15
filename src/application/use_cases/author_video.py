@@ -19,6 +19,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from uuid import uuid4
 
 from src.application.ports import Clock, PromptScriptWriter, UnitOfWork
 from src.domain.authoring.visuals import Shot, ShotKind, VisualPlan, default_plan
@@ -121,8 +122,14 @@ def create_video_from_prompt(
     plan: VisualPlan | None = None,
     voice_id: str | None = None,
     output_aspect_ratio: AspectRatio | None = None,
+    series_id: int | None = None,
+    start_production: bool = True,
 ) -> AuthoredVideo:
-    """Đề bài của người dùng → kịch bản tiếng Việt → item sẵn sàng lồng tiếng."""
+    """Đề bài của người dùng → kịch bản tiếng Việt → item sẵn sàng lồng tiếng.
+
+    ``start_production=False`` giữ item là bản nháp ở ``scripted``, chưa xếp việc
+    lồng tiếng — dùng cho bản nháp sinh từ Series, cần người đọc kịch bản trước.
+    """
     from src.application.use_cases.synthesize_voice import SpeechRateUnknown
 
     clean_author = author.strip()
@@ -150,7 +157,9 @@ def create_video_from_prompt(
     with uow:
         assert source.id is not None
         item = Item.from_prompt(
-            url=SourceUrl(f"{STUDIO_SOURCE_URL}#{clock.now().timestamp():.0f}"),
+            # Hậu tố ngẫu nhiên: sinh hàng loạt từ Series tạo nhiều item trong cùng một
+            # giây, mà ``item_url`` là duy nhất.
+            url=SourceUrl(f"{STUDIO_SOURCE_URL}#{clock.now().timestamp():.0f}-{uuid4().hex[:8]}"),
             source_id=source.id,
             script_vi=script,
             title=title.strip() or brief.strip()[:80],
@@ -158,10 +167,12 @@ def create_video_from_prompt(
             author=clean_author,
             voice_id=voice_id,
             output_aspect_ratio=output_aspect_ratio,
+            series_id=series_id,
         )
         uow.items.add(item)
         assert item.id is not None
-        uow.jobs.enqueue(Job(task=JobTask.SYNTHESIZE, item_id=item.id))
+        if start_production:
+            uow.jobs.enqueue(Job(task=JobTask.SYNTHESIZE, item_id=item.id))
         uow.audit.record(
             entity="item",
             entity_id=item.id,
@@ -173,6 +184,8 @@ def create_video_from_prompt(
                 "output_aspect_ratio": (
                     str(output_aspect_ratio) if output_aspect_ratio else "original"
                 ),
+                "series_id": series_id,
+                "start_production": start_production,
             },
         )
         uow.commit()

@@ -11,6 +11,7 @@ mà không có evidence) sẽ nổ ngay lúc đọc, chứ không lẳng lặng 
 
 from __future__ import annotations
 
+from src.domain.authoring.series import PostingCadence, Series, SubtitlePreset
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import (
     AspectRatio,
@@ -27,7 +28,7 @@ from src.domain.sourcing.value_objects import (
     LicenseScope,
     SourceUrl,
 )
-from src.infrastructure.db.orm import ItemRow, JobRow, PublicationRow, SourceRow
+from src.infrastructure.db.orm import ItemRow, JobRow, PublicationRow, SeriesRow, SourceRow
 
 # ---------------- Source ----------------
 
@@ -131,6 +132,7 @@ def item_to_domain(row: ItemRow) -> Item:
         clip_index=row.clip_index,
         include_attribution=row.include_attribution,
         voice_id=row.voice_id,
+        series_id=row.series_id,
         review_by=row.review_by,
         review_at=row.review_at,
         review_notes=row.review_notes,
@@ -165,6 +167,7 @@ def item_apply(row: ItemRow, item: Item) -> ItemRow:
     row.clip_index = item.clip_index
     row.include_attribution = item.include_attribution
     row.voice_id = item.voice_id
+    row.series_id = item.series_id
     row.review_by = item.review_by
     row.review_at = item.review_at
     row.review_notes = item.review_notes
@@ -173,6 +176,52 @@ def item_apply(row: ItemRow, item: Item) -> ItemRow:
 
 def item_to_row(item: Item) -> ItemRow:
     return item_apply(ItemRow(), item)
+
+
+# ---------------- Series ----------------
+
+
+def series_to_domain(row: SeriesRow) -> Series:
+    cadence = (
+        PostingCadence(weekdays=tuple(row.cadence_weekdays), time_of_day=row.cadence_time)
+        if row.cadence_weekdays and row.cadence_time
+        else None
+    )
+    return Series(
+        id=row.id,
+        name=row.name,
+        pillar=row.pillar,
+        hook_templates=tuple(row.hook_templates or ()),
+        target_sec=float(row.target_sec),
+        kept_terms=tuple(row.kept_terms or ()),
+        output_aspect_ratio=AspectRatio.parse(row.output_aspect_ratio),
+        language=row.language,
+        voice_id=row.voice_id,
+        subtitle=SubtitlePreset(
+            font_size=row.subtitle_font_size, max_chars_per_line=row.subtitle_max_chars
+        ),
+        cadence=cadence,
+    )
+
+
+def series_apply(row: SeriesRow, series: Series) -> SeriesRow:
+    row.name = series.name
+    row.pillar = series.pillar
+    row.hook_templates = list(series.hook_templates)
+    row.kept_terms = list(series.kept_terms)
+    row.target_sec = series.target_sec
+    row.output_aspect_ratio = str(series.output_aspect_ratio)
+    row.language = series.language
+    row.voice_id = series.voice_id
+    row.subtitle_font_size = series.subtitle.font_size
+    row.subtitle_max_chars = series.subtitle.max_chars_per_line
+    row.cadence_weekdays = list(series.cadence.weekdays) if series.cadence else None
+    row.cadence_time = series.cadence.time_of_day if series.cadence else None
+    return row
+
+
+def series_to_row(series: Series) -> SeriesRow:
+    return series_apply(SeriesRow(), series)
 
 
 # ---------------- Publication ----------------
