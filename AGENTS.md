@@ -168,7 +168,7 @@ cả youtube.com.
 - Thời gian: luôn UTC có timezone, lấy qua port `Clock`. So sánh `expires_at` với `datetime`
   naive sẽ nổ `TypeError` ngay trong license gate.
 - Log JSON ra stdout; Docker gom vào `data/{env}/logs/`.
-- **Không có thư mục `vendor/`.** Code tham khảo từ dự án mở được **viết lại thành module của chính dự án**, đặt trong `src/` và sửa tự do như mọi code khác. Đổi lại: ghi xuất xứ trong docstring của module, và khai vào `THIRD_PARTY_NOTICES.md` — đó là nghĩa vụ license, không phải thủ tục.
+- **Không có thư mục `vendor/`.** Code tham khảo từ dự án mở được **viết lại thành module của chính dự án**, đặt trong `src/` và sửa tự do như mọi code khác. Đổi lại: ghi xuất xứ trong docstring của module, và khai vào `docs/THIRD_PARTY_NOTICES.md` — đó là nghĩa vụ license, không phải thủ tục.
 
 ### Mượn code từ dự án mở
 
@@ -180,7 +180,7 @@ bằng tiếng Việt như phần còn lại.
 Hai việc bắt buộc khi làm vậy:
 
 1. **Docstring của module** ghi repo, commit và license gốc.
-2. **`THIRD_PARTY_NOTICES.md`** ghi đã lấy gì, đưa vào đâu, và **sửa những gì**. Với
+2. **`docs/THIRD_PARTY_NOTICES.md`** ghi đã lấy gì, đưa vào đâu, và **sửa những gì**. Với
    Apache-2.0 thì nêu rõ thay đổi là nghĩa vụ license, không phải thủ tục nội bộ.
 
 Đã làm theo cách này với **Easel** (Apache-2.0) cho đổi khung hình và trộn audio.

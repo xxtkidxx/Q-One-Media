@@ -248,7 +248,7 @@ def mix_voice_over_background(
     được pad im lặng, còn nền được cắt đúng mốc tương ứng của video nguồn.
 
     Graph ở đây viết lại từ ``skills/shared/scripts/audio_mix.py`` của **Easel**
-    (Apache-2.0 — xem ``THIRD_PARTY_NOTICES.md``), **có sửa một lỗi**: bản gốc thiếu
+    (Apache-2.0 — xem ``docs/THIRD_PARTY_NOTICES.md``), **có sửa một lỗi**: bản gốc thiếu
     ``aformat`` trước ``sidechaincompress`` nên đổ ngay khi bật ducking với đầu vào
     của dự án này (giọng mono 24 kHz từ TTS + nền stereo 44,1 kHz từ Demucs). Hai
     khác biệt nữa so với bản gốc:

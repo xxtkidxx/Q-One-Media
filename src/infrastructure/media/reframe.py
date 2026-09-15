@@ -2,7 +2,7 @@
 
 Thuật toán *blur fill* và *focus crop* ở đây viết lại từ ``skills/shared/scripts/
 reframe.py`` của **Easel** (https://github.com/ZJU-REAL/Easel, Apache-2.0, commit
-``16f068e4a5c147712d01ae6601765e42edaaf6e8``). Xem ``THIRD_PARTY_NOTICES.md``.
+``16f068e4a5c147712d01ae6601765e42edaaf6e8``). Xem ``docs/THIRD_PARTY_NOTICES.md``.
 
 Viết lại chứ không gọi lại script gốc, vì ba lý do đo được:
 

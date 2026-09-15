@@ -7,15 +7,16 @@ Pipeline tự động hoá short video tiếng Việt cho **NMI Technologies Vi�
 
 **Trạng thái:** lõi Giai đoạn 1 đã có code và test — license gate, hộp thư URL, hàng đợi việc,
 pipeline media, mặt tiền web nội bộ, adapter publish. Các bước cần GPU hoặc credential nền tảng
-(WhisperX, VoxCPM2, YouTube, Facebook) **chưa chạy thật**. Chi tiết: [PLAN.md](PLAN.md).
+(WhisperX, VoxCPM2, YouTube, Facebook) **chưa chạy thật**. Chi tiết: [PLAN.md](../PLAN.md).
 
 ## Bắt đầu từ đâu
 
 | Bạn là | Đọc file |
 |---|---|
-| Người theo dõi tiến độ | **[PLAN.md](PLAN.md)** — hiện trạng, bảng việc, quyết định đã chốt, câu hỏi còn chờ |
-| AI agent (Codex / Claude Code) | **[AGENTS.md](AGENTS.md)** — quy tắc token, không subagent, kỷ luật test |
-| Người cần đặc tả kỹ thuật | **[docs/phuong-an-cuoi-cung.md](docs/phuong-an-cuoi-cung.md)** — bản chốt duy nhất |
+| Người theo dõi tiến độ | **[PLAN.md](../PLAN.md)** — hiện trạng, bảng việc, quyết định đã chốt, câu hỏi còn chờ |
+| AI agent (Codex / Claude Code) | **[AGENTS.md](../AGENTS.md)** — quy tắc token, không subagent, kỷ luật test |
+| Người cần đặc tả kỹ thuật | **[docs/phuong-an-cuoi-cung.md](phuong-an-cuoi-cung.md)** — bản chốt duy nhất |
+| Người vận hành kênh TikTok | **[docs/lo-trinh-tiktok-smart-factory.md](lo-trinh-tiktok-smart-factory.md)** — lộ trình nội dung 0 → 10.000 follow |
 
 ## Chạy
 
@@ -77,13 +78,13 @@ data/models/                cache model ~10 GB    ← dùng chung dev/prod (arti
 
 ## Bố cục
 
-Clean Architecture — mũi tên phụ thuộc luôn chỉ vào trong. Chi tiết và quy tắc: [AGENTS.md](AGENTS.md).
+Clean Architecture — mũi tên phụ thuộc luôn chỉ vào trong. Chi tiết và quy tắc: [AGENTS.md](../AGENTS.md).
 
 ```
 AGENTS.md · CLAUDE.md     hướng dẫn agent (CLAUDE.md chỉ là con trỏ)
 PLAN.md                   kế hoạch + hiện trạng
-THIRD_PARTY_NOTICES.md    code mượn từ dự án mở: lấy gì, sửa gì (nghĩa vụ license)
-docs/                     đặc tả duy nhất
+docs/                     mọi tài liệu còn lại: README, đặc tả duy nhất, lộ trình TikTok,
+                          THIRD_PARTY_NOTICES.md (code mượn từ dự án mở: lấy gì, sửa gì — nghĩa vụ license)
 docker/                   Dockerfile + 2 file compose độc lập (dev, prod) + init SQL
 src/domain/               nghiệp vụ thuần, chỉ stdlib — license gate sống ở đây
 src/application/          use case + port
