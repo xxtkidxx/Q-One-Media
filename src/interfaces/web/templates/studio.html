@@ -1,81 +1,23 @@
 {% extends "base.html" %}{% block body %}
-<div class="page-head">
-  <div>
-    <h1>Studio</h1>
-    <p class="sub">Nhập đề bài → hệ thống viết kịch bản tiếng Việt trong ngân sách âm tiết, lồng tiếng, dựng hình và dừng ở gate duyệt như mọi video khác.</p>
-  </div>
-  <button onclick="document.getElementById('briefModal').showModal()">＋ Video mới</button>
-</div>
-
-<div class="toast-stack" aria-live="polite">
-{% if request.query_params.get('created') %}<div class="toast success">Đã tạo video #{{ request.query_params.get('created') }}. Worker đang lồng tiếng — thêm ảnh/biểu đồ ngay bên dưới trong lúc chờ.<button type="button" onclick="this.parentElement.remove()">×</button></div>{% endif %}
-{% if request.query_params.get('shot_added') %}<div class="toast success">Đã thêm cảnh vào video #{{ request.query_params.get('shot_added') }}.<button type="button" onclick="this.parentElement.remove()">×</button></div>{% endif %}
-{% if request.query_params.get('shot_removed') %}<div class="toast success">Đã xoá cảnh khỏi video #{{ request.query_params.get('shot_removed') }}.<button type="button" onclick="this.parentElement.remove()">×</button></div>{% endif %}
-</div>
-
-{% for row in rows %}{% set item = row.item %}
-<section class="card" data-item-id="{{ item.id }}" data-stage="{{ item.stage.value }}">
-  <div class="item-top">
-    <div>
-      <h2 style="margin:0">#{{ item.id }} · {{ item.title_original or 'Chưa đặt tiêu đề' }}</h2>
-      <p class="sub">{{ item.script_sources|join(', ') }} · khung {{ item.segment.duration_sec|round(0)|int if item.segment else '?' }} giây · giọng: {{ row.voice_label }}</p>
-    </div>
-    <span class="pill {{ item.stage.value }}" data-live-stage>{{ row.stage_label }}</span>
-  </div>
-  <div class="item-top" style="margin-top:9px"><strong data-live-progress-label>Bước {{ row.step }}/{{ row.total }} · {{ row.percent }}% · {{ row.step_label }}</strong><span class="sub">Tiến độ pipeline</span></div>
-  <div class="progress"><span data-live-progress style="width:{{ row.percent }}%"></span></div>
-  <div class="note legal" data-live-error {% if not item.stage_error %}hidden{% endif %}>{{ item.stage_error or '' }}</div>
-
-  <details style="margin-top:12px"><summary><strong>Kịch bản tiếng Việt</strong></summary><p style="white-space:pre-wrap">{{ item.script_vi or 'Chưa có.' }}</p></details>
-
-  <h3 style="margin-top:16px">Kịch bản hình ({{ row.shots|length }} cảnh)</h3>
-  <div class="scroll"><table><thead><tr><th>#</th><th>Loại</th><th>Giây</th><th>Nội dung</th><th></th></tr></thead><tbody>
-  {% for shot in row.shots %}<tr>
-    <td class="num">{{ loop.index }}</td>
-    <td><span class="pill">{% if shot.kind.value=='upload' %}Ảnh/video của bạn{% elif shot.kind.value=='stock' %}Kho có license{% elif shot.kind.value=='chart' %}Biểu đồ số liệu{% elif shot.kind.value=='generated' %}AI sinh theo prompt{% else %}Thẻ thương hiệu{% endif %}</span></td>
-    <td class="num">{{ shot.seconds }}</td>
-    <td>{{ shot.caption or shot.prompt or '—' }}{% if shot.data %}<br><span class="sub mono">{% for label, value in shot.data %}{{ label }}={{ value }}{% if not loop.last %} · {% endif %}{% endfor %}</span>{% endif %}</td>
-    <td><form method="post" action="/studio/{{ item.id }}/shots/{{ loop.index0 }}/delete"><button class="close" title="Xoá cảnh">×</button></form></td>
-  </tr>{% else %}<tr><td colspan="5" class="empty">Chưa có cảnh nào.</td></tr>{% endfor %}
-  </tbody></table></div>
-
-  <details style="margin-top:12px"><summary><strong>＋ Thêm cảnh</strong></summary>
-    <form method="post" action="/studio/{{ item.id }}/shots" enctype="multipart/form-data">
-      <div class="row">
-        <div><label>Loại cảnh</label><select name="kind"><option value="upload">Ảnh/video của bạn</option><option value="chart">Biểu đồ từ số liệu</option><option value="generated">AI sinh theo prompt</option><option value="brand_card">Thẻ thương hiệu</option></select></div>
-        <div><label>Dài (giây)</label><input type="number" name="seconds" value="6" step="0.5" min="1.5" max="12"></div>
-        <div><label>Người thêm</label><input name="actor" value="web" required></div>
-      </div>
-      <label>Chữ hiện trên cảnh</label><input name="caption" placeholder="Ví dụ: Cpk đo cái gì">
-      <label>File ảnh hoặc video (khi chọn “Ảnh/video của bạn”)</label><input type="file" name="media" accept="image/png,image/jpeg,imagep,video/mp4,video/quicktime,videom">
-      <label>Prompt cho AI (khi chọn “AI sinh theo prompt”)</label><input name="prompt" placeholder="Ví dụ: dây chuyền lắp ráp điện tử, ánh sáng lạnh">
-      <label>Số liệu biểu đồ — mỗi dòng một cột, dạng <code>Nhãn = số</code></label><textarea name="chart_data" placeholder="T1 = 1.10&#10;T2 = 1.33&#10;T3 = 1.41"></textarea>
-      <p class="sub">{% if image_provider %}Đang dùng nhà cung cấp ảnh: <strong>{{ image_provider }}</strong>. AI chỉ dùng cho ảnh bối cảnh — số liệu luôn đi qua cảnh biểu đồ.{% else %}Chưa cấu hình nhà cung cấp sinh ảnh (<code>IMAGE_PROVIDER</code>), cảnh AI sẽ tự rơi về thẻ thương hiệu.{% endif %}</p>
-      <div class="actions"><button>Thêm cảnh</button></div>
-    </form>
-  </details>
-
-  {% if row.video_url %}<div class="two-col" style="margin-top:14px"><video controls preload="metadata" src="{{ row.video_url }}"></video><div><h3>Thành phẩm</h3><p class="sub">Duyệt và xuất bản tại <a href="/review/{{ item.id }}">trang review</a>.</p></div></div>{% endif %}
-</section>
-{% else %}
-<div class="card"><div class="empty">Chưa có video nào. Bấm “＋ Video mới” để nhập đề bài đầu tiên.</div></div>
-{% endfor %}
-
-<dialog id="briefModal" class="modal"><div class="modal-inner">
-  <div class="modal-head"><div><h2 style="margin:0">Video mới từ đề bài</h2><p class="sub">Viết đề bài như giao việc cho người viết: nói rõ nội dung, người xem là ai, và giọng điệu.</p></div><button class="close" onclick="document.getElementById('briefModal').close()">×</button></div>
-  <form method="post" action="/studio">
-    <label>Tiêu đề</label><input name="title" placeholder="Ví dụ: Cpk trong 60 giây">
-    <label>Đề bài</label><textarea name="brief" required placeholder="Ví dụ: Giải thích Cpk cho quản lý nhà máy. Nêu khác biệt giữa Cp và Cpk, vì sao Cpk cao vẫn có thể ra hàng lỗi. Kết bằng việc người xem kiểm tra được ngay hôm nay."></textarea>
-    <div class="row">
-      <div><label>Thời lượng (giây)</label><input type="number" name="target_sec" value="60" min="1" step="1"></div>
-      <div><label>Người tạo</label><input name="actor" value="web" required></div>
-    </div>
-    <label>Giọng đọc</label>
-    <select name="voice_id">{% for voice in voices %}<option value="{{ voice.id }}" {% if voice.id == default_voice %}selected{% endif %} {% if not voice.available %}disabled{% endif %}>{{ voice.label }}{% if voice.gender %} · {{ voice.gender }}{% endif %}{% if voice.region %} · giọng {{ voice.region }}{% endif %}{% if voice.note %} — {{ voice.note }}{% endif %}</option>{% endfor %}</select>
-    <p class="sub">Thả file mẫu vào <code>media/voices/</code> để thêm giọng clone VoxCPM2; kèm file <code>.txt</code> cùng tên chứa lời đọc mẫu thì clone sát hơn.</p>
-    <p class="sub">Khuyến cáo {{ seg_best_min|round(0)|int }}–{{ seg_best_max|round(0)|int }} giây cho video ngắn; bạn vẫn có thể đặt thời lượng dài tùy ý. Kịch bản được viết theo ngân sách âm tiết của thời lượng đã chọn.</p>
-    <p class="note legal">Model không được bịa số liệu, tên khách hàng hay kết quả dự án. Con số cụ thể thì bạn đưa vào đề bài hoặc dựng thành cảnh biểu đồ.</p>
-    <div class="actions"><button>Viết kịch bản và chạy pipeline</button><button type="button" class="ghost" onclick="document.getElementById('briefModal').close()">Hủy</button></div>
-  </form>
-</div></dialog>
+<div class="page-head"><div><h1>Studio</h1><p class="sub">Quản lý video do Q One sản xuất và mở không gian biên tập riêng cho từng video.</p></div><button onclick="briefModal.showModal()">＋ Video mới</button></div>
+<div class="grid"><div class="card metric"><div class="n">{{ rows|length }}</div><div class="k">Video Studio</div><div class="trend">Nội dung nội bộ</div></div><div class="card metric"><div class="n">{{ rows|selectattr('item.stage.value','equalto','human_review')|list|length }}</div><div class="k">Chờ duyệt</div><div class="trend">Cần người phụ trách</div></div></div>
+<section class="card"><div class="item-top"><div><h2 style="margin:0">Danh sách video</h2><p class="sub">Bấm mở để biên tập cảnh, xem kịch bản và lịch sử xử lý.</p></div></div><div class="scroll"><table><thead><tr><th>Video</th><th>Khung</th><th>Giọng</th><th>Trạng thái</th><th>Tiến trình</th><th></th></tr></thead><tbody>
+{% for row in rows %}{% set item=row.item %}<tr data-item-id="{{ item.id }}"><td><strong>#{{ item.id }} · {{ item.title_original or 'Chưa đặt tiêu đề' }}</strong><br><span class="sub">{{ item.script_sources|join(', ') }}</span></td><td>{{ item.output_aspect_ratio or 'Giữ nguyên' }}</td><td>{{ row.voice_label }}</td><td><span class="pill {{ item.stage.value }}">{{ row.stage_label }}</span></td><td><span class="sub">Bước {{ row.step }}/{{ row.total }} · {{ row.percent }}% · {{ row.step_label }}</span><div class="progress"><span style="width:{{ row.percent }}%"></span></div></td><td><a class="btn" href="/studio/{{ item.id }}">Mở biên tập</a></td></tr>{% else %}<tr><td colspan="6" class="empty">Chưa có video Studio nào.</td></tr>{% endfor %}</tbody></table></div></section>
+<dialog id="briefModal" class="modal"><div class="modal-inner"><div class="modal-head"><div><h2 style="margin:0">Tạo video Studio</h2><p class="sub">Chọn một video hoặc nhiều ảnh ngay bây giờ, hoặc để trống và bổ sung sau.</p></div><button class="close" type="button" onclick="briefModal.close()">×</button></div><form method="post" action="/studio" enctype="multipart/form-data"><label>Tiêu đề</label><input name="title" placeholder="Ví dụ: Cpk trong 60 giây"><label>Đề bài</label><textarea name="brief" required placeholder="Mô tả nội dung, người xem và giọng điệu..."></textarea><div class="row"><div><label>Thời lượng (giây)</label><input type="number" name="target_sec" value="60" min="1" step="1"></div><div><label>Tỷ lệ đầu ra</label><select name="output_ratio"><option value="9:16">Theo kích thước cũ · 9:16</option><option value="9:16">Dọc · 9:16</option><option value="16:9">Ngang · 16:9</option></select></div></div><label>Video hoặc tập ảnh ban đầu (không bắt buộc)</label><input type="file" name="media" multiple accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,video/webm"><p class="sub">Người tạo: <strong>{{ request.state.user.display_name }}</strong> · lấy từ tài khoản đăng nhập.</p><label>Giọng đọc</label><select name="voice_id">{% for voice in voices %}<option value="{{ voice.id }}" {% if voice.id == default_voice %}selected{% endif %} {% if not voice.available %}disabled{% endif %}>{{ voice.label }}{% if voice.gender %} · {{ voice.gender }}{% endif %}{% if voice.region %} · giọng {{ voice.region }}{% endif %}</option>{% endfor %}</select><p class="note legal">Số liệu, khách hàng và kết quả dự án phải đến từ thông tin bạn cung cấp.</p><div class="actions"><button>Tạo video và mở trang biên tập</button><button type="button" class="ghost" onclick="briefModal.close()">Hủy</button></div></form></div></dialog>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  const select=document.querySelector('#briefModal select[name="voice_id"]');
+  if(!select)return;
+  const previewUrls={
+    {% for voice in voices %}{% if voice.id in preview_voice_ids %}"{{ voice.id }}":"/voices/{{ voice.engine }}/{{ voice.name }}/preview",{% endif %}{% endfor %}
+  };
+  for(const option of select.options)if(previewUrls[option.value])option.dataset.previewUrl=previewUrls[option.value];
+  const picker=document.createElement('div');picker.className='voice-picker';
+  const controls=document.createElement('div');controls.className='voice-picker-controls';
+  select.parentNode.insertBefore(picker,select);picker.appendChild(controls);controls.appendChild(select);
+  const button=document.createElement('button');button.type='button';button.className='ghost';button.dataset.previewButton='';button.textContent='▶ Nghe thử';button.onclick=()=>playVoicePreview(button);controls.appendChild(button);
+  const audio=document.createElement('audio');audio.controls=true;audio.preload='none';audio.dataset.voicePreview='';audio.hidden=true;picker.appendChild(audio);
+  select.onchange=()=>updateVoicePreview(select);updateVoicePreview(select);
+});
+</script>
 {% endblock %}

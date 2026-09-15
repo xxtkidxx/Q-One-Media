@@ -44,6 +44,7 @@ class RenderRequest:
     work_dir: Path
     output: Path
     source_aspect: AspectRatio | None = None
+    output_aspect: AspectRatio | None = PORTRAIT_9_16
     attribution_text: str | None = None
     font_name: str = "Be Vietnam Pro"
     fonts_dir: Path | None = None
@@ -71,12 +72,13 @@ class FfmpegRenderer:
         # 2. Reframe CÓ ĐIỀU KIỆN — nguồn đã 9:16 thì bỏ qua, tiết kiệm một lần
         #    encode và tránh giảm chất lượng vô ích.
         aspect = req.source_aspect or self._probe_aspect(clip)
-        if aspect is not None and not aspect.needs_reframe_to(PORTRAIT_9_16):
+        target = req.output_aspect
+        if target is None or (aspect is not None and not aspect.needs_reframe_to(target)):
             log.info("render.reframe.skipped", aspect=str(aspect))
             framed = clip
         else:
             framed = reframe_video(
-                clip, req.work_dir / "framed.mp4", ratio="9:16", mode=ReframeMode.BLUR
+                clip, req.work_dir / "framed.mp4", ratio=str(target), mode=ReframeMode.BLUR
             )
 
         # 3. Trộn audio: giọng Việt lên nền tiếng máy

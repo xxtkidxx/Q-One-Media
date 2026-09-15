@@ -33,7 +33,7 @@ if(badge){badge.textContent=state.stage_label||state.stage;badge.className=`pill
 if(bar){const pct=Math.max(0,Math.min(100,Number(state.progress)||0));bar.style.width=`${pct}%`;bar.dataset.progressStatus=state.job_status||state.stage;bar.parentElement.setAttribute('role','progressbar');bar.parentElement.setAttribute('aria-valuemin','0');bar.parentElement.setAttribute('aria-valuemax','100');bar.parentElement.setAttribute('aria-valuenow',String(pct))}
 if(label)label.textContent=`Bước ${state.step}/${state.total_steps} · ${state.progress}% đã hoàn tất · ${state.label}`;
 if(error){error.textContent=state.error||'';error.hidden=!state.error}
-card.dataset.stage=state.stage;if(old!==state.stage&&actionable.includes(state.stage)){if(document.querySelector('[data-subtitle-editor][data-dirty]'))continue;
+card.dataset.stage=state.stage;if((onSources||onReview)&&old!==state.stage&&actionable.includes(state.stage)){if(document.querySelector('[data-subtitle-editor][data-dirty]'))continue;
 // Tới gate mới thì mở đúng tab của việc mới: bỏ hash để server chọn tab mặc định.
 if(onReview)try{history.replaceState(null,'',location.pathname+location.search)}catch(_){}
 if(onSources)sessionStorage.setItem('qone-open',JSON.stringify([...document.querySelectorAll('.source-detail:not([hidden])')].map(e=>e.id)));location.reload();return}}}catch(_){}}

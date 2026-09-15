@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from src.domain.authoring.visuals import Shot, ShotKind, VisualPlan
+from src.domain.production.value_objects import PORTRAIT_9_16, AspectRatio
 from src.infrastructure.media import ffmpeg
 from src.shared.logging import get_logger
 
@@ -48,6 +49,7 @@ class ComposeRequest:
     music_bed: Path | None = None
     font_name: str = "Be Vietnam Pro"
     font_file: Path | None = None
+    output_aspect: AspectRatio | None = PORTRAIT_9_16
 
 
 def _escape_text(value: str) -> str:
@@ -99,8 +101,19 @@ class FfmpegComposer:
             with_audio, ass_path, req.work_dir / "subbed.mp4", strict_glyphs=True
         )
         final = ffmpeg.normalize_loudness(subbed, req.output)
-        log.info("compose.done", output=str(final), shots=len(plan.shots), sec=voice_sec)
+        log.info(
+            "compose.done",
+            output=str(final),
+            shots=len(plan.shots),
+            sec=voice_sec,
+            aspect=str(req.output_aspect or PORTRAIT_9_16),
+        )
         return final
+
+    @staticmethod
+    def _size(req: ComposeRequest) -> tuple[int, int]:
+        ratio = req.output_aspect or PORTRAIT_9_16
+        return (1920, 1080) if str(ratio) == "16:9" else (WIDTH, HEIGHT)
 
     # ---------------- Từng cảnh ----------------
 
@@ -136,10 +149,11 @@ class FfmpegComposer:
             return self._brand_card(shot, dest, req)
         info = ffmpeg.probe(path)
         is_image = not info.has_video or info.duration_sec <= 0
+        width, height = self._size(req)
         chain = (
-            f"[0:v]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=increase,"
-            f"crop={WIDTH}:{HEIGHT},boxblur=40:2,setsar=1[bg];"
-            f"[0:v]scale={WIDTH}:{HEIGHT}:force_original_aspect_ratio=decrease,setsar=1[fg];"
+            f"[0:v]scale={width}:{height}:force_original_aspect_ratio=increase,"
+            f"crop={width}:{height},boxblur=40:2,setsar=1[bg];"
+            f"[0:v]scale={width}:{height}:force_original_aspect_ratio=decrease,setsar=1[fg];"
             f"[bg][fg]overlay=(W-w)/2:(H-h)/2,fps={FPS},format=yuv420p"
         )
         if shot.caption:
@@ -163,10 +177,11 @@ class FfmpegComposer:
         chain += (
             f",drawbox=x=(w-360)/2:y=h*0.72:w=360:h=6:color={BRAND_ACCENT}@1:t=fill"
         )
+        width, height = self._size(req)
         ffmpeg.run(
             [
                 "-y", "-f", "lavfi",
-                "-i", f"color=c={BRAND_BG}:s={WIDTH}x{HEIGHT}:r={FPS}:d={shot.seconds:.2f}",
+                "-i", f"color=c={BRAND_BG}:s={width}x{height}:r={FPS}:d={shot.seconds:.2f}",
                 "-filter_complex", chain, "-an",
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(dest),
             ]
@@ -183,8 +198,9 @@ class FfmpegComposer:
         data = list(shot.data)
         top = max(value for _, value in data) or 1.0
         count = len(data)
-        margin, base_y, chart_h = 110, int(HEIGHT * 0.62), int(HEIGHT * 0.34)
-        slot = (WIDTH - 2 * margin) / count
+        width, height = self._size(req)
+        margin, base_y, chart_h = 110, int(height * 0.62), int(height * 0.34)
+        slot = (width - 2 * margin) / count
         bar_w = int(slot * 0.55)
 
         chain = "[0:v]format=yuv420p"
@@ -205,12 +221,12 @@ class FfmpegComposer:
                 f",drawtext=text='{_escape_text(label[:14])}':fontcolor=white@0.75:fontsize=36"
                 f":x={x}+{bar_w}/2-text_w/2:y={base_y + 24}"
             )
-        chain += f",drawbox=x={margin}:y={base_y}:w={WIDTH - 2 * margin}:h=4:color=white@0.5:t=fill"
+        chain += f",drawbox=x={margin}:y={base_y}:w={width - 2 * margin}:h=4:color=white@0.5:t=fill"
 
         ffmpeg.run(
             [
                 "-y", "-f", "lavfi",
-                "-i", f"color=c={BRAND_BG}:s={WIDTH}x{HEIGHT}:r={FPS}:d={shot.seconds:.2f}",
+                "-i", f"color=c={BRAND_BG}:s={width}x{height}:r={FPS}:d={shot.seconds:.2f}",
                 "-filter_complex", chain, "-an",
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(dest),
             ]

@@ -347,7 +347,7 @@ def test_nut_nap_video_tao_nguon_moi_va_van_qua_license_gate(client, monkeypatch
         "approved", "single-url", "Nguồn nạp tay",
     )
     assert source.may_modify_audio is True
-    assert "quan.nguyen" in source.evidence_ref  # xác nhận nội bộ, không bịa bằng chứng
+    assert "admin" in source.evidence_ref  # danh tính đến từ session, không tin dữ liệu form
     assert (item.source_id, item.stage) == (1, "downloaded")
     get_config().paths.absolute(item.path_source).unlink(missing_ok=True)
 
@@ -467,16 +467,12 @@ def test_nguon_douyin_hien_canh_bao_watermark(client):
 # ---------------- Gate duyệt ----------------
 
 
-def test_duyet_khong_ghi_ten_nguoi_duyet_thi_bi_tu_choi(client):
-    """Lỗi quay về đúng trang review, không nhảy sang URL của POST."""
+def test_duyet_lay_danh_tinh_tu_session_thay_vi_form(client):
+    """Actor rỗng/giả trong form không còn chi phối danh tính người duyệt."""
     resp = client.post(
         "/review/1/approve", data={"actor": "  ", "notes": ""}, follow_redirects=False
     )
-    assert resp.status_code == 303
-    assert resp.headers["location"].startswith("/review/1?error=")
-    assert "Thi%E1%BA%BFu%20t%C3%AAn%20ng%C6%B0%E1%BB%9Di%20duy%E1%BB%87t" in (
-        resp.headers["location"]
-    )
+    assert resp.status_code == 404  # đã qua kiểm tra danh tính; item thử nghiệm không tồn tại
 
 
 def test_tu_choi_ma_khong_ghi_ly_do_thi_bi_chan(client):
@@ -952,7 +948,7 @@ def test_studio_tao_video_tu_de_bai_nguoi_dung_nhap(client, monkeypatch):
     )
     empty = client.get("/studio")
     assert empty.status_code == 200
-    assert "Chưa có video nào" in empty.text
+    assert "Chưa có video Studio nào" in empty.text
 
     resp = client.post(
         "/studio",
@@ -961,6 +957,7 @@ def test_studio_tao_video_tu_de_bai_nguoi_dung_nhap(client, monkeypatch):
             "title": "Cpk trong 60 giây",
             "target_sec": "60",
             "actor": "quan.nguyen",
+            "output_ratio": "16:9",
         },
         follow_redirects=False,
     )
@@ -971,7 +968,10 @@ def test_studio_tao_video_tu_de_bai_nguoi_dung_nhap(client, monkeypatch):
     uow = get_uow()
     with uow:
         item = uow.session.execute(
-            text("SELECT id, stage, script_vi, script_sources, path_source FROM items")
+            text(
+                "SELECT id, stage, script_vi, script_sources, path_source, "
+                "output_aspect_ratio FROM items"
+            )
         ).one()
         task = uow.session.execute(text("SELECT task FROM jobs")).scalar_one()
         source = uow.session.execute(
@@ -979,14 +979,23 @@ def test_studio_tao_video_tu_de_bai_nguoi_dung_nhap(client, monkeypatch):
         ).one()
     assert item.stage == "scripted"
     assert item.script_vi.startswith("Cpk nói gì")
-    assert item.script_sources == ["prompt:quan.nguyen"]
+    assert item.script_sources == ["prompt:admin"]
     assert item.path_source is None  # không dùng thước phim của ai
+    assert item.output_aspect_ratio == "16:9"
     assert task == "synthesize"  # bỏ qua tải/nhận dạng/chọn đoạn
     assert (source.status, source.license_type) == ("approved", "own")
 
     page = client.get("/studio").text
     assert "Cpk trong 60 giây" in page
-    assert "Thẻ thương hiệu" in page  # chưa đưa hình thì không bịa ảnh
+    assert "/studio/1" in page
+    detail = client.get("/studio/1").text
+    assert "brand_card" in detail  # chưa đưa hình thì không bịa ảnh
+
+
+def test_studio_polling_khong_reload_lam_dong_form_video_moi(client):
+    page = client.get("/studio").text
+    assert "(onSources||onReview)&&old!==state.stage" in page
+    assert "(onSources||onReview||onStudio)&&old!==state.stage" not in page
 
 
 def test_studio_them_canh_bieu_do_tu_so_lieu_nhap_tay(client, monkeypatch):
@@ -1016,9 +1025,9 @@ def test_studio_them_canh_bieu_do_tu_so_lieu_nhap_tay(client, monkeypatch):
     )
     assert resp.status_code == 303
 
-    page = client.get("/studio").text
-    assert "Biểu đồ số liệu" in page
-    assert "T1=1.1" in page.replace(" ", "")
+    page = client.get("/studio/1").text
+    assert "chart" in page
+    assert "Cpk theo tháng" in page
 
     # Số liệu sai định dạng thì nói rõ, không nuốt
     bad = client.post(
@@ -1118,6 +1127,8 @@ def test_chon_giong_khi_tao_clip_va_o_studio(client, monkeypatch):
     )
     studio_page = client.get("/studio").text
     assert 'name="voice_id"' in studio_page
+    assert "▶ Nghe thử" in studio_page
+    assert "/voices/" in studio_page
     client.post(
         "/studio",
         data={

@@ -272,3 +272,27 @@ def test_render_dung_lai_khi_font_thieu_dau_tieng_viet(portrait_video, tmp_path)
                 font_name="Font Khong Ton Tai 999",
             )
         )
+
+
+@skip_no_ffmpeg
+def test_studio_compose_ton_trong_lua_chon_ngang_16_9(tmp_path):
+    from src.domain.authoring.visuals import Shot, ShotKind, VisualPlan
+    from src.domain.production.value_objects import AspectRatio
+    from src.infrastructure.media.compose import ComposeRequest, FfmpegComposer
+
+    voice = tmp_path / "voice.wav"
+    ffmpeg.run(["-f", "lavfi", "-i", "sine=frequency=220:duration=2", str(voice)])
+    output = FfmpegComposer().compose(
+        ComposeRequest(
+            plan=VisualPlan((Shot(kind=ShotKind.BRAND_CARD, seconds=2, caption="NMIT"),)),
+            voice_audio=voice,
+            subtitle_cues=[],
+            work_dir=tmp_path / "compose-16x9",
+            output=tmp_path / "studio-16x9.mp4",
+            media_root=tmp_path,
+            output_aspect=AspectRatio(16, 9),
+            font_name="DejaVu Sans",
+        )
+    )
+    info = ffmpeg.probe(output)
+    assert (info.width, info.height) == (1920, 1080)

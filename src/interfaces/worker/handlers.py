@@ -319,6 +319,7 @@ def handle_render(job: Job, uow: UnitOfWork, settings: Settings) -> None:
             work_dir=work / "render",
             output=output,
             source_aspect=aspect,
+            output_aspect=item.output_aspect_ratio,
             attribution_text=attribution,
             # fonts_dir=None có chủ ý: image worker cài font vào
             # /usr/share/fonts/truetype/qone/ rồi chạy fc-cache, nên libass tìm
@@ -364,6 +365,7 @@ def handle_compose(job: Job, uow: UnitOfWork, settings: Settings) -> None:
         voice = settings.paths.absolute(item.path_work.relative_path)
         title = item.title_original or "Q One"
         target = item.segment.duration_sec if item.segment else 30.0
+        output_aspect = item.output_aspect_ratio
 
     plan = resolve_generated_shots(
         item_id,
@@ -391,6 +393,7 @@ def handle_compose(job: Job, uow: UnitOfWork, settings: Settings) -> None:
             work_dir=work / "compose",
             output=output,
             media_root=settings.media_root,
+            output_aspect=output_aspect,
         )
     )
 

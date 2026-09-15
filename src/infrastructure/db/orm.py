@@ -134,6 +134,7 @@ class ItemRow(Base):
     title_original: Mapped[str | None] = mapped_column(Text, default=None)
     duration_sec: Mapped[int | None] = mapped_column(Integer, default=None)
     aspect_ratio: Mapped[str | None] = mapped_column(Text, default=None)
+    output_aspect_ratio: Mapped[str | None] = mapped_column(Text, default=None)
 
     stage: Mapped[ItemStage] = mapped_column(
         _enum(ItemStage, "item_stage"), default=ItemStage.INBOX

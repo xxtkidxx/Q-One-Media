@@ -17,6 +17,7 @@ from src.application.ports import Clock, ScriptWriter, SegmentAdvisor, UnitOfWor
 from src.domain.errors import DomainError, InvariantViolation
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import (
+    AspectRatio,
     ItemStage,
     Segment,
     SpeechRate,
@@ -40,6 +41,7 @@ def create_manual_clips(
     clock: Clock,
     actor: str,
     voice_id: str | None = None,
+    output_aspect_ratio: AspectRatio | None = None,
 ) -> list[Item]:
     """Tạo các item con dùng chung media gốc, mỗi item là một clip độc lập."""
     if not ranges:
@@ -74,6 +76,7 @@ def create_manual_clips(
                 clip_index=index,
                 include_attribution=include_attribution or attribution_required,
                 voice_id=voice_id,
+                output_aspect_ratio=output_aspect_ratio,
             )
             child.mark_downloaded(
                 path=parent.path_source,

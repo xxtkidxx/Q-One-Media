@@ -37,6 +37,7 @@ from src.application.use_cases.author_video import (
     add_shot,
     create_video_from_prompt,
     load_visual_plan,
+    queue_studio_recompose,
     remove_shot,
 )
 from src.application.use_cases.manage_sources import (
@@ -100,12 +101,18 @@ TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 # thay vì file. Khai một lần ở đây vì gọi ``File()`` trong default là bẫy dùng chung
 # giữa các lần gọi.
 OPTIONAL_FILE = File()
+OPTIONAL_FILES = File()
 
 router = APIRouter(tags=["web"], include_in_schema=False)
 
 Uow = Annotated[SqlUnitOfWork, Depends(get_uow)]
 Clock = Annotated[SystemClock, Depends(get_clock)]
 Config = Annotated[Settings, Depends(get_config)]
+
+
+def _actor(request: Request) -> str:
+    """Danh tính thao tác luôn đến từ session đã xác thực, không nhận từ form."""
+    return request.state.user.username
 
 # Thứ tự các bước để hiện trên dashboard — theo đúng dòng chảy pipeline, không
 # theo thứ tự chữ cái, để người xem đọc được nghẽn đang ở đâu.
@@ -389,12 +396,112 @@ def studio_page(request: Request, uow: Uow, config: Config):
         seg_best_max=RECOMMENDED_SEGMENT_MAX_SEC,
         image_provider=config.visuals.provider if config.visuals.enabled else None,
         voices=list_voices(config),
+        preview_voice_ids={
+            voice.id
+            for voice in list_voices(config)
+            if voice.preview_path is not None and voice.preview_path.is_file()
+        },
         default_voice=default_voice_id(config),
     )
 
 
+@router.get("/studio/{item_id}", response_class=HTMLResponse)
+def studio_detail(request: Request, item_id: int, uow: Uow, config: Config):
+    with uow:
+        item = uow.items.get(item_id)
+        studio = uow.sources.get_by_url(SourceUrl(STUDIO_SOURCE_URL))
+        if item is None or studio is None or item.source_id != studio.id:
+            raise HTTPException(status_code=404, detail=f"không có video Studio #{item_id}")
+        events = list(
+            uow.session.scalars(
+                select(AuditLogRow)
+                .where(AuditLogRow.entity == "item", AuditLogRow.entity_id == item_id)
+                .order_by(AuditLogRow.id.desc())
+                .limit(50)
+            )
+        )
+    plan = load_visual_plan(config.media_root, item_id)
+    cues_path = config.paths.item_work_dir(item_id) / "cues.json"
+    cues = []
+    if cues_path.exists():
+        import json
+
+        cues = json.loads(cues_path.read_text("utf-8"))
+    step, total, percent, label = _progress_detail(item.stage)
+    return _render(
+        request,
+        "studio_detail.html",
+        title=item.title_original or f"Video Studio #{item_id}",
+        item=item,
+        shots=plan.shots if plan else (),
+        events=events,
+        stage_label=_stage_label(item.stage),
+        step=step,
+        total=total,
+        percent=percent,
+        step_label=label,
+        voice_label=label_for(item.voice_id, config),
+        video_url=("/media/" + item.path_output.relative_path if item.path_output else None),
+        image_provider=config.visuals.provider if config.visuals.enabled else None,
+        cues=cues,
+        can_recompose=item.stage is ItemStage.HUMAN_REVIEW,
+        is_published=item.stage is ItemStage.PUBLISHED,
+    )
+
+
+@router.get("/studio/{item_id}/voice", response_class=FileResponse)
+def studio_voice(item_id: int, uow: Uow, config: Config):
+    with uow:
+        item = uow.items.get(item_id)
+        studio = uow.sources.get_by_url(SourceUrl(STUDIO_SOURCE_URL))
+    if item is None or studio is None or item.source_id != studio.id or item.path_work is None:
+        raise HTTPException(status_code=404, detail="audio giọng đọc chưa tồn tại")
+    path = config.paths.absolute(item.path_work.relative_path)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="file audio giọng đọc chưa tồn tại")
+    return FileResponse(path)
+
+
+@router.post("/studio/{item_id}/recompose", response_class=HTMLResponse)
+def studio_recompose(
+    request: Request,
+    item_id: int,
+    uow: Uow,
+    config: Config,
+    start: Annotated[list[float] | None, Form()] = None,
+    end: Annotated[list[float] | None, Form()] = None,
+    text_line: Annotated[list[str] | None, Form()] = None,
+):
+    import json
+
+    try:
+        with uow:
+            item = uow.items.get(item_id)
+        if item is None or item.stage is not ItemStage.HUMAN_REVIEW:
+            raise ValueError("chỉ sửa timing khi bản dựng đang chờ duyệt")
+        start, end, text_line = start or [], end or [], text_line or []
+        if not (len(start) == len(end) == len(text_line)):
+            raise ValueError("số mốc thời gian và dòng phụ đề không khớp")
+        cues = []
+        previous_end = 0.0
+        for index, (cue_start, cue_end, cue_text) in enumerate(
+            zip(start, end, text_line, strict=True), start=1
+        ):
+            if cue_start < 0 or cue_end <= cue_start or cue_start < previous_end:
+                raise ValueError(f"timing dòng {index} không hợp lệ hoặc bị chồng nhau")
+            cues.append({"start": cue_start, "end": cue_end, "text": cue_text.strip()})
+            previous_end = cue_end
+        cues_path = config.paths.item_work_dir(item_id) / "cues.json"
+        cues_path.parent.mkdir(parents=True, exist_ok=True)
+        cues_path.write_text(json.dumps(cues, ensure_ascii=False, indent=1), encoding="utf-8")
+        queue_studio_recompose(item_id, uow=uow, actor=_actor(request))
+    except (DomainError, ValueError) as exc:
+        return _error_page(request, "Không dựng lại được video", str(exc))
+    return RedirectResponse(url=f"/studio/{item_id}?recomposing=1", status_code=303)
+
+
 @router.post("/studio", response_class=HTMLResponse)
-def studio_create(
+async def studio_create(
     request: Request,
     uow: Uow,
     clock: Clock,
@@ -402,9 +509,11 @@ def studio_create(
     brief: Annotated[str, Form()],
     title: Annotated[str, Form()] = "",
     target_sec: Annotated[float, Form()] = 60.0,
-    actor: Annotated[str, Form()] = "web",
     voice_id: Annotated[str, Form()] = "",
+    output_ratio: Annotated[str, Form()] = "9:16",
+    media: Annotated[list[UploadFile] | None, OPTIONAL_FILES] = None,
 ):
+    actor = _actor(request)
     try:
         with uow:
             glossary = load_glossary(uow, "en")
@@ -420,10 +529,39 @@ def studio_create(
             uow=uow,
             clock=clock,
             voice_id=voice_id.strip() or None,
+            output_aspect_ratio=(
+                None if output_ratio == "original" else AspectRatio.parse(output_ratio)
+            ),
         )
+        for upload in media or []:
+            if not upload.filename:
+                continue
+            suffix = Path(upload.filename).suffix.lower()
+            if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".mp4", ".mov", ".webm"}:
+                raise ValueError("chỉ nhận ảnh PNG/JPG/WEBP hoặc video MP4/MOV/WEBM")
+            destination = config.paths.source / "studio" / f"{uuid4().hex}{suffix}"
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            with destination.open("xb") as output:
+                while chunk := await upload.read(1024 * 1024):
+                    output.write(chunk)
+            add_shot(
+                result.item.id or 0,
+                shot=Shot(
+                    kind=ShotKind.UPLOAD,
+                    seconds=6.0,
+                    caption=Path(upload.filename).stem,
+                    asset=config.paths.relative(destination),
+                ),
+                media_root=config.media_root,
+                uow=uow,
+                actor=actor,
+            )
     except (DomainError, RuntimeError, ValueError) as exc:
         return _error_page(request, "Không tạo được video", str(exc))
-    return RedirectResponse(url=f"/studio?created={result.item.id}", status_code=303)
+    finally:
+        for upload in media or []:
+            await upload.close()
+    return RedirectResponse(url=f"/studio/{result.item.id}?created=1", status_code=303)
 
 
 @router.post("/studio/{item_id}/shots", response_class=HTMLResponse)
@@ -437,7 +575,6 @@ async def studio_add_shot(
     caption: Annotated[str, Form()] = "",
     prompt: Annotated[str, Form()] = "",
     chart_data: Annotated[str, Form()] = "",
-    actor: Annotated[str, Form()] = "web",
     media: Annotated[UploadFile | None, OPTIONAL_FILE] = None,
 ):
     """Thêm một cảnh: file người dùng đưa vào, prompt cho AI, hoặc số liệu biểu đồ."""
@@ -471,7 +608,7 @@ async def studio_add_shot(
             ),
             media_root=config.media_root,
             uow=uow,
-            actor=actor.strip() or "web",
+            actor=_actor(request),
         )
     except (DomainError, ValueError) as exc:
         return _error_page(request, "Không thêm được cảnh", str(exc))
@@ -488,16 +625,15 @@ def studio_remove_shot(
     index: int,
     uow: Uow,
     config: Config,
-    actor: Annotated[str, Form()] = "web",
 ):
     try:
         remove_shot(
             item_id, index=index, media_root=config.media_root, uow=uow,
-            actor=actor.strip() or "web",
+            actor=_actor(request),
         )
     except DomainError as exc:
         return _error_page(request, "Không xoá được cảnh", str(exc))
-    return RedirectResponse(url=f"/studio?shot_removed={item_id}", status_code=303)
+    return RedirectResponse(url=f"/studio/{item_id}?shot_removed=1", status_code=303)
 
 
 def _parse_chart_data(raw: str) -> tuple[tuple[str, float], ...]:
@@ -731,12 +867,12 @@ def sources_page(
 
 @router.post("/items/{item_id}/clips", response_class=HTMLResponse)
 def create_clips_form(
-    item_id: int, uow: Uow, clock: Clock, config: Config,
+    request: Request, item_id: int, uow: Uow, clock: Clock, config: Config,
     start_sec: Annotated[list[float], Form()],
     end_sec: Annotated[list[float], Form()],
-    actor: Annotated[str, Form()] = "web",
     include_attribution: Annotated[bool, Form()] = False,
     voice_id: Annotated[str, Form()] = "",
+    output_ratio: Annotated[str, Form()] = "original",
 ):
     try:
         if len(start_sec) != len(end_sec):
@@ -748,8 +884,11 @@ def create_clips_form(
             media_root=config.media_root,
             uow=uow,
             clock=clock,
-            actor=actor.strip() or "web",
+            actor=_actor(request),
             voice_id=voice_id.strip() or None,
+            output_aspect_ratio=(
+                None if output_ratio == "original" else AspectRatio.parse(output_ratio)
+            ),
         )
     except (DomainError, ValueError) as exc:
         return _review_error(item_id, f"Không tạo được clip: {exc}")
@@ -784,16 +923,16 @@ def voice_preview(engine: str, name: str, config: Config):
 
 @router.post("/items/{item_id}/transcript", response_class=HTMLResponse)
 def save_transcript_form(
+    request: Request,
     item_id: int,
     uow: Uow,
     config: Config,
     start: Annotated[list[float], Form()],
     end: Annotated[list[float], Form()],
     text_line: Annotated[list[str], Form()],
-    actor: Annotated[str, Form()] = "web",
     decision: Annotated[str, Form()] = "save",
 ):
-    clean_actor = actor.strip() or "web"
+    clean_actor = _actor(request)
     try:
         edit_transcript(
             item_id,
@@ -819,7 +958,6 @@ def declare(
     url: Annotated[str, Form()],
     platform: Annotated[Platform, Form()],
     kind: Annotated[SourceKind, Form()],
-    actor: Annotated[str, Form()],
     audio_lang: Annotated[str, Form()] = "en",
     external_owner_id: Annotated[str, Form()] = "",
     display_name: Annotated[str, Form()] = "",
@@ -827,7 +965,7 @@ def declare(
     notes: Annotated[str, Form()] = "",
 ):
     try:
-        clean_actor = actor.strip() or "web"
+        clean_actor = _actor(request)
         declare_source(
             DeclareSourceCommand(
                 url=url.strip(),
@@ -853,7 +991,6 @@ def approve_source_form(
     source_id: int,
     uow: Uow,
     clock: Clock,
-    actor: Annotated[str, Form()],
     license_type: Annotated[LicenseType, Form()],
     evidence_ref: Annotated[str, Form()] = "",
     attribution_text: Annotated[str, Form()] = "",
@@ -864,7 +1001,7 @@ def approve_source_form(
     may_commercial_use: Annotated[bool, Form()] = False,
 ):
     try:
-        clean_actor = actor.strip()
+        clean_actor = _actor(request)
         with uow:
             source = uow.sources.get(source_id)
         if source is None:
@@ -903,7 +1040,7 @@ def start_single_source(request: Request, source_id: int, uow: Uow, clock: Clock
             raise DomainError(f"không có nguồn #{source_id}")
         if source.kind is not SourceKind.SINGLE_URL:
             raise DomainError("chỉ nguồn loại một video mới có thể tự tải URL nguồn")
-        result = submit_url(source.url.value, uow=uow, clock=clock, actor="web")
+        result = submit_url(source.url.value, uow=uow, clock=clock, actor=_actor(request))
     except (DomainError, ItemAlreadyExists) as exc:
         return _error_page(request, "Không bắt đầu được pipeline", str(exc))
     return RedirectResponse(
@@ -968,7 +1105,6 @@ async def upload_new_source_video(
     may_subtitle: Annotated[bool, Form()] = False,
     may_republish: Annotated[bool, Form()] = False,
     may_commercial_use: Annotated[bool, Form()] = False,
-    actor: Annotated[str, Form()] = "web",
 ):
     """Nạp video = **khai báo một nguồn mới rồi nạp file vào nó**.
 
@@ -980,7 +1116,7 @@ async def upload_new_source_video(
     quyền ngay trong form này, và vẫn đi qua ``declare_source`` → ``approve_source``
     như mọi nguồn khác. Form này chỉ gộp ba bước thành một màn hình, không bỏ bước nào.
     """
-    clean_actor = actor.strip() or "web"
+    clean_actor = _actor(request)
     destination: Path | None = None
     try:
         upload_id, destination = await _store_upload(video, config)
@@ -1043,7 +1179,6 @@ async def upload_into_source(
     clock: Clock,
     config: Config,
     video: Annotated[UploadFile, File()],
-    actor: Annotated[str, Form()] = "web",
 ):
     """Nạp thêm một video vào **nguồn đã duyệt** — nút trên từng dòng nguồn."""
     destination: Path | None = None
@@ -1057,7 +1192,7 @@ async def upload_into_source(
             uow=uow,
             clock=clock,
             config=config,
-            actor=actor.strip() or "web",
+            actor=_actor(request),
         )
     except (DomainError, RuntimeError, ValueError) as exc:
         if destination is not None:
@@ -1074,10 +1209,9 @@ def submit(
     uow: Uow,
     clock: Clock,
     url: Annotated[str, Form()],
-    actor: Annotated[str, Form()] = "web",
 ):
     try:
-        result = submit_url(url.strip(), uow=uow, clock=clock, actor=actor.strip() or "web")
+        result = submit_url(url.strip(), uow=uow, clock=clock, actor=_actor(request))
     except (SourceNotDeclared, ItemAlreadyExists) as exc:
         return _error_page(request, "Không nạp được URL", str(exc))
     except DomainError as exc:
@@ -1132,11 +1266,9 @@ def transcript_queue(request: Request, uow: Uow, config: Config):
 
 @router.post("/transcripts/{item_id}/approve", response_class=HTMLResponse)
 def transcript_approve(
-    request: Request, item_id: int, uow: Uow, actor: Annotated[str, Form()]
+    request: Request, item_id: int, uow: Uow
 ):
-    who = actor.strip()
-    if not who:
-        return _error_page(request, "Thiếu tên người soát", "Ai soát phải được ghi lại.")
+    who = _actor(request)
     try:
         approve_transcript(item_id, actor=who, uow=uow)
     except DomainError as exc:
@@ -1268,21 +1400,19 @@ def review_detail(request: Request, item_id: int, uow: Uow, config: Config):
 
 @router.post("/review/{item_id}/{decision}", response_class=HTMLResponse)
 def review_decide(
+    request: Request,
     item_id: int,
     decision: str,
     uow: Uow,
     clock: Clock,
     config: Config,
-    actor: Annotated[str, Form()],
     notes: Annotated[str, Form()] = "",
     return_to: Annotated[int, Form()] = 0,
 ):
     # Quyết định thường được bấm trong popup của một clip, trên trang video gốc —
     # trả người dùng về đúng trang họ đang đứng, không nhảy sang trang của clip.
     back = return_to or item_id
-    who = actor.strip()
-    if not who:
-        return _review_error(back, "Thiếu tên người duyệt: ai duyệt phải được ghi lại.")
+    who = _actor(request)
     try:
         if decision == "approve":
             approve_item(

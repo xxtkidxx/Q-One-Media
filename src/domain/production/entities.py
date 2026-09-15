@@ -51,7 +51,7 @@ _ALLOWED: dict[ItemStage, frozenset[ItemStage]] = {
     ItemStage.RENDERED: frozenset({ItemStage.HUMAN_REVIEW, ItemStage.FAILED}),
     # human_review -> segment_picked: người duyệt trả về viết lại kịch bản
     ItemStage.HUMAN_REVIEW: frozenset(
-        {ItemStage.APPROVED, ItemStage.REJECTED, ItemStage.SEGMENT_PICKED}
+        {ItemStage.APPROVED, ItemStage.REJECTED, ItemStage.SEGMENT_PICKED, ItemStage.ALIGNED}
     ),
     ItemStage.APPROVED: frozenset({ItemStage.PUBLISHED, ItemStage.FAILED, ItemStage.REJECTED}),
     ItemStage.PUBLISHED: frozenset(),
@@ -69,6 +69,8 @@ class Item:
     title_original: str | None = None
     duration_sec: int | None = None
     aspect_ratio: AspectRatio | None = None
+    # None = giữ nguyên tỷ lệ nguồn; có giá trị = khung đầu ra người dùng chọn.
+    output_aspect_ratio: AspectRatio | None = None
 
     stage: ItemStage = ItemStage.INBOX
     stage_error: str | None = None
@@ -128,6 +130,7 @@ class Item:
         target_sec: float,
         author: str,
         voice_id: str | None = None,
+        output_aspect_ratio: AspectRatio | None = PORTRAIT_9_16,
     ) -> Item:
         """Giai đoạn 2, đường thủ công: **người dùng tự nhập yêu cầu nội dung**.
 
@@ -154,6 +157,7 @@ class Item:
             segment=Segment(0.0, target_sec, rationale="Giai đoạn 2 · nội dung tự nhập"),
             duration_sec=int(target_sec),
             aspect_ratio=PORTRAIT_9_16,
+            output_aspect_ratio=output_aspect_ratio,
             include_attribution=False,
             voice_id=voice_id,
             _dubbing_cleared=True,
@@ -257,6 +261,10 @@ class Item:
 
     def send_to_human_review(self) -> None:
         self._to(ItemStage.HUMAN_REVIEW)
+
+    def reopen_visual_edit(self) -> None:
+        """Thành phẩm Studio quay lại bước trước compose để dựng lại có kiểm soát."""
+        self._to(ItemStage.ALIGNED)
 
     def approve(self, *, by: str, at: datetime, notes: str | None = None) -> None:
         """Gate duyệt của người — bắt buộc ở Giai đoạn 1, không có chế độ tự động."""

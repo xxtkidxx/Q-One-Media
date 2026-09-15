@@ -25,6 +25,8 @@ from src.domain.authoring.visuals import Shot, ShotKind, VisualPlan, default_pla
 from src.domain.errors import DomainError, InvariantViolation
 from src.domain.production.entities import Item
 from src.domain.production.value_objects import (
+    AspectRatio,
+    ItemStage,
     SpeechRate,
     SyllableBudget,
 )
@@ -118,6 +120,7 @@ def create_video_from_prompt(
     clock: Clock,
     plan: VisualPlan | None = None,
     voice_id: str | None = None,
+    output_aspect_ratio: AspectRatio | None = None,
 ) -> AuthoredVideo:
     """Đề bài của người dùng → kịch bản tiếng Việt → item sẵn sàng lồng tiếng."""
     from src.application.use_cases.synthesize_voice import SpeechRateUnknown
@@ -154,6 +157,7 @@ def create_video_from_prompt(
             target_sec=target_sec,
             author=clean_author,
             voice_id=voice_id,
+            output_aspect_ratio=output_aspect_ratio,
         )
         uow.items.add(item)
         assert item.id is not None
@@ -163,7 +167,13 @@ def create_video_from_prompt(
             entity_id=item.id,
             action="authored_from_prompt",
             actor=clean_author,
-            detail={"brief": brief.strip()[:500], "target_sec": target_sec},
+            detail={
+                "brief": brief.strip()[:500],
+                "target_sec": target_sec,
+                "output_aspect_ratio": (
+                    str(output_aspect_ratio) if output_aspect_ratio else "original"
+                ),
+            },
         )
         uow.commit()
 
@@ -238,6 +248,8 @@ def add_shot(
         item = uow.items.get(item_id)
         if item is None:
             raise ItemNotFound(f"không có item #{item_id}")
+        if item.stage in (ItemStage.APPROVED, ItemStage.PUBLISHED, ItemStage.REJECTED):
+            raise InvariantViolation("video đã chốt hoặc xuất bản — hãy tạo phiên bản mới để sửa")
     existing = load_visual_plan(media_root, item_id)
     shots = list(existing.shots) if existing else []
     # Kịch bản mặc định chỉ là thẻ thương hiệu giữ chỗ; cảnh thật đầu tiên thay nó.
@@ -261,6 +273,12 @@ def add_shot(
 def remove_shot(
     item_id: int, *, index: int, media_root: Path, uow: UnitOfWork, actor: str
 ) -> VisualPlan:
+    with uow:
+        item = uow.items.get(item_id)
+        if item is None:
+            raise ItemNotFound(f"không có item #{item_id}")
+        if item.stage in (ItemStage.APPROVED, ItemStage.PUBLISHED, ItemStage.REJECTED):
+            raise InvariantViolation("video đã chốt hoặc xuất bản — hãy tạo phiên bản mới để sửa")
     plan = load_visual_plan(media_root, item_id)
     if plan is None or not 0 <= index < len(plan.shots):
         raise InvariantViolation(f"không có cảnh số {index + 1}")
@@ -274,6 +292,27 @@ def remove_shot(
         )
         uow.commit()
     return new_plan
+
+
+def queue_studio_recompose(item_id: int, *, uow: UnitOfWork, actor: str) -> Item:
+    """Lưu một vòng chỉnh Studio và dựng lại thành phẩm; không ghi đè bản đã xuất bản."""
+    with uow:
+        item = uow.items.get(item_id)
+        source = uow.sources.get(item.source_id) if item else None
+        if item is None or source is None or source.url.value != STUDIO_SOURCE_URL:
+            raise ItemNotFound(f"không có video Studio #{item_id}")
+        if item.stage is ItemStage.PUBLISHED:
+            raise InvariantViolation("video đã xuất bản — phải tạo phiên bản mới, không ghi đè")
+        if item.stage is not ItemStage.HUMAN_REVIEW:
+            raise InvariantViolation("chỉ dựng lại được khi thành phẩm đang chờ duyệt")
+        item.reopen_visual_edit()
+        uow.items.update(item)
+        uow.jobs.enqueue(Job(task=JobTask.COMPOSE, item_id=item_id))
+        uow.audit.record(
+            entity="item", entity_id=item_id, action="studio_recompose_queued", actor=actor
+        )
+        uow.commit()
+        return item
 
 
 def resolve_generated_shots(

@@ -116,6 +116,9 @@ def item_to_domain(row: ItemRow) -> Item:
         title_original=row.title_original,
         duration_sec=row.duration_sec,
         aspect_ratio=AspectRatio.parse(row.aspect_ratio) if row.aspect_ratio else None,
+        output_aspect_ratio=(
+            AspectRatio.parse(row.output_aspect_ratio) if row.output_aspect_ratio else None
+        ),
         stage=row.stage,
         stage_error=row.stage_error,
         path_source=MediaAsset(row.path_source) if row.path_source else None,
@@ -146,6 +149,9 @@ def item_apply(row: ItemRow, item: Item) -> ItemRow:
     row.title_original = item.title_original
     row.duration_sec = item.duration_sec
     row.aspect_ratio = str(item.aspect_ratio) if item.aspect_ratio else None
+    row.output_aspect_ratio = (
+        str(item.output_aspect_ratio) if item.output_aspect_ratio else None
+    )
     row.stage = item.stage
     row.stage_error = item.stage_error
     row.path_source = item.path_source.relative_path if item.path_source else None

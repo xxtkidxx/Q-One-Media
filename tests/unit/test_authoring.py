@@ -16,6 +16,7 @@ from src.application.use_cases.author_video import (
     add_shot,
     create_video_from_prompt,
     load_visual_plan,
+    queue_studio_recompose,
     remove_shot,
     resolve_generated_shots,
     save_visual_plan,
@@ -180,6 +181,22 @@ def test_xoa_canh_cuoi_thi_quay_ve_the_thuong_hieu(uow, clock, tmp_path):
     )
     plan = remove_shot(result.item.id, index=0, media_root=tmp_path, uow=uow, actor="q")
     assert plan.shots and all(shot.kind is ShotKind.BRAND_CARD for shot in plan.shots)
+
+
+def test_luu_chinh_sua_studio_xep_hang_dung_lai(uow, clock, tmp_path):
+    item = _create(uow, clock, tmp_path).item
+    item.mark_voiced(path=MediaAsset("work/voice.wav"))
+    item.mark_aligned()
+    item.mark_mixed()
+    item.mark_rendered(path=MediaAsset("output/final.mp4"))
+    item.send_to_human_review()
+    uow.items.update(item)
+
+    queue_studio_recompose(item.id, uow=uow, actor="quan.nguyen")
+
+    assert item.stage is ItemStage.ALIGNED
+    assert uow.jobs.all()[-1].task is JobTask.COMPOSE
+    assert "studio_recompose_queued" in uow.audit.actions()
 
 
 def test_khong_co_nha_cung_cap_anh_thi_canh_ai_roi_ve_the_thuong_hieu(uow, clock, tmp_path):
